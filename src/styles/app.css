@@ -752,8 +752,18 @@
 .focus-bar > * { flex: none; }
 .focus-bar-divider { width: 1px; height: 1.5rem; background: rgb(25 26 46 / 0.1); }
 @media (max-width: 640px) {
-  .focus-bar { border-radius: 1.25rem; flex-wrap: wrap; justify-content: center; row-gap: 0.4rem; }
+  .focus-bar {
+    left: 0.75rem;
+    right: 0.75rem;
+    max-width: none;
+    transform: none;
+    border-radius: 1.25rem;
+    flex-wrap: wrap;
+    justify-content: center;
+    row-gap: 0.4rem;
+  }
   .focus-bar-divider { display: none; }
+  .doc-focus .doc-page { margin-top: 8.75rem; }
 }
 
 /* Chip's answers. */

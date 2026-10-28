@@ -281,7 +281,7 @@ export function ChipPanel({ onClose }: { onClose?: () => void }) {
         <Orb size={28} state={streaming ? 'thinking' : 'idle'} />
         <div className="min-w-0 flex-1">
           <p className="text-[0.95rem] font-semibold leading-tight">Chip</p>
-          <p className="truncate text-xs text-ink-3">{time ? describe(time) : 'Your study partner'}</p>
+          <p className="truncate text-xs text-ink-3">{time ? describe(time).replace(' messages', '') : 'Your tutor'}</p>
         </div>
         <ModelSwitch />
         <Menu label="Your chats with Chip" button={<History size={17} />}>
@@ -523,7 +523,7 @@ function ChipAnswer({ message: m, last }: { message: ChatMessage; last: boolean 
       {m.meta.stopped && <p className="mt-1 text-xs text-ink-4">Stopped.</p>}
       {m.meta.cut && <p className="mt-1 text-xs text-ink-4">That ran long, so it stops there. Ask Chip to carry on.</p>}
       {!m.streaming && (m.content || m.error) && (
-        <div className="mt-1.5 flex items-center gap-0.5 text-ink-4">
+        <div className="mt-1.5 flex flex-wrap items-center gap-0.5 text-ink-4">
           {m.content && (
             <button
               className="icon-btn h-7 w-7"
@@ -551,16 +551,16 @@ function ChipAnswer({ message: m, last }: { message: ChatMessage; last: boolean 
             </button>
           )}
           {last && !streaming && (m.mode === 'explain' || m.mode === 'guide') && m.content && (
-            <button className="ml-1 rounded-full px-2.5 py-1 text-xs font-semibold text-iris hover:bg-iris-soft" onClick={() => void sendToChip('Check my understanding of that with three quick questions.', 'explain')}>
+            <button className="ml-1 whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-semibold text-iris hover:bg-iris-soft" onClick={() => void sendToChip('Check my understanding of that with three quick questions.', 'explain')}>
               Check my understanding
             </button>
           )}
           {last && !streaming && m.mode === 'guide' && m.content && (
-            <button className="rounded-full px-2.5 py-1 text-xs font-semibold text-ink-3 hover:bg-paper-2 hover:text-ink" onClick={() => void sendToChip('Just explain it to me now, step by step.', 'explain')}>
+            <button className="whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-semibold text-ink-3 hover:bg-paper-2 hover:text-ink" onClick={() => void sendToChip('Just explain it to me now, step by step.', 'explain')}>
               Just explain it
             </button>
           )}
-          {m.meta.kind && <span className="ml-auto text-[0.7rem]">{m.meta.kind === 'best' ? 'Chip’s best' : 'Chip Fast'}</span>}
+          {m.meta.kind && <span className="ml-auto whitespace-nowrap text-[0.7rem]">{m.meta.kind === 'best' ? 'Chip’s best' : 'Chip Fast'}</span>}
         </div>
       )}
     </div>
