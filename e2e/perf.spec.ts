@@ -131,3 +131,29 @@ test('opening the editor', async ({ page }) => {
   console.log(`opening: ${ms}ms`);
   void s;
 });
+
+test('typing in the chat box and the side panels never stalls', async ({ page }) => {
+  await instrument(page);
+  const m = new MockBackend();
+  m.seedAssignment();
+  await m.install(page);
+  await page.goto('/app');
+  await page.getByRole('link', { name: /Coastal erosion essay/ }).first().click();
+  await expect(page.locator('.doc-prose')).toBeVisible();
+  await throttle(page, 4);
+  const text = 'Coastal retreat works with the sea, not against it.';
+  const typeIn = async (name: string, field: ReturnType<Page['locator']>) => {
+    await field.click();
+    await page.evaluate(() => window.__perf.start());
+    await field.pressSequentially(text, { delay: 35 });
+    const s = summary(`typing in ${name} (4x CPU)`, await page.evaluate(() => window.__perf.stop()));
+    await expect(field).toHaveValue(new RegExp(`${text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`));
+    expect(s.p95, name).toBeLessThanOrEqual(34);
+    expect(Math.max(0, ...s.long), name).toBeLessThan(100);
+  };
+  await typeIn('the chat box', page.getByPlaceholder(/Chip will guide you/));
+  await page.getByRole('tab', { name: 'Brief' }).or(page.getByRole('button', { name: 'Brief', exact: true })).first().click();
+  await typeIn('the brief (course)', page.locator('#b-course'));
+  await page.getByRole('tab', { name: 'Plan' }).or(page.getByRole('button', { name: 'Plan', exact: true })).first().click();
+  await typeIn('a new task', page.getByLabel('New task'));
+});

@@ -86,6 +86,48 @@ test('starting something to learn', async ({ page }) => {
   await nothingClipped(page);
 });
 
+test('typing in a dialog stays where you type, key by key', async ({ page }) => {
+  const m = new MockBackend();
+  await m.install(page);
+  await page.goto('/app');
+  await page.getByRole('button', { name: 'Start something new' }).click();
+  await page.getByRole('button', { name: /Something to learn/ }).click();
+  const course = page.locator('#t-course');
+  await course.click();
+  // Typed as a person types, with pauses longer than the dialog's own focus timer.
+  await course.pressSequentially('CHEM 210', { delay: 90 });
+  await expect(course).toHaveValue('CHEM 210');
+  await expect(course).toBeFocused();
+  await expect(page.getByLabel('What do you want to learn?')).toHaveValue('');
+  const goal = page.locator('#t-goal');
+  await goal.click();
+  await goal.pressSequentially('Mechanisms', { delay: 90 });
+  await expect(goal).toHaveValue('Mechanisms');
+  await expect(goal).toBeFocused();
+});
+
+test('the first focus: Chip says, a line at a time, where to change the focus time', async ({ page }) => {
+  const m = new MockBackend();
+  await m.install(page);
+  await page.goto('/app');
+  await page.getByRole('button', { name: 'Start focus' }).click();
+  const tip = page.locator('.focus-tip');
+  await expect(tip.getByText('Let’s focus.')).toBeVisible();
+  await expect(tip.getByText(/Your sessions are 25 minutes, with a 5-minute break/)).toBeVisible();
+  await expect(tip.getByText(/change your focus time in Settings/)).toBeVisible();
+  await tip.getByRole('link', { name: 'Change focus time' }).click();
+  await expect(page).toHaveURL(/\/app\/settings#focus$/);
+  await expect(page.locator('#focus')).toBeInViewport();
+  await expect(page.locator('#focus')).toHaveClass(/settings-glow/);
+  await expect(page.getByRole('radio', { name: '25 min' })).toBeVisible();
+  await nothingClipped(page);
+  // Seen: never again.
+  await page.goto('/app');
+  await page.getByRole('button', { name: /Pause|Carry on|Start focus/ }).first().click();
+  await page.waitForTimeout(800);
+  await expect(page.locator('.focus-tip')).toHaveCount(0);
+});
+
 test('an assignment from its brief: Chip sets it up', async ({ page }) => {
   const m = new MockBackend();
   await m.install(page);
@@ -102,6 +144,44 @@ test('an assignment from its brief: Chip sets it up', async ({ page }) => {
   await expect(page.locator('.doc-prose')).toBeVisible();
   expect(m.db.study_tasks.map((t) => t.title)).toEqual(['Read the set chapters', 'Write an outline']);
   expect(m.db.study_assignments[0].brief).toContain('Essay brief');
+});
+
+// A 1×1 PNG: a stand-in for a photo of a page.
+const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');
+
+test('a sheet in parts: Chip reads several photos at once', async ({ page }) => {
+  const m = new MockBackend();
+  await m.install(page);
+  await page.goto('/app');
+  await page.getByRole('button', { name: 'Start something new' }).click();
+  await page.getByRole('button', { name: /An assignment/ }).click();
+  await page.locator('input[type="file"]').setInputFiles([
+    { name: 'page-1.png', mimeType: 'image/png', buffer: PNG },
+    { name: 'page-2.png', mimeType: 'image/png', buffer: PNG },
+  ]);
+  await expect(page.getByLabel('Title')).toHaveValue('Essay: Coastal erosion and policy');
+  const asked = m.made('/functions/v1/chip-study', 'POST').map((r) => r.body as { action: string; files?: unknown[] });
+  expect(asked.at(-1)).toMatchObject({ action: 'setup' });
+  expect(asked.at(-1)?.files).toHaveLength(2);
+});
+
+test('several readings at once, to learn from', async ({ page }) => {
+  const m = new MockBackend();
+  await m.install(page);
+  await page.goto('/app');
+  await page.getByRole('button', { name: 'Start something new' }).click();
+  await page.getByRole('button', { name: /Something to learn/ }).click();
+  await page.getByLabel('What do you want to learn?').fill('Coastal geography');
+  const reading = (name: string, text: string) => ({ name, mimeType: 'text/plain', buffer: Buffer.from(text) });
+  await page.locator('input[type="file"]').setInputFiles([
+    reading('chapter-1.txt', 'Coasts are shaped by waves, tides and the rocks they meet, over long spans of time.'),
+    reading('chapter-2.txt', 'Sea walls protect one stretch of coast and often speed up erosion further along it.'),
+  ]);
+  await expect(page.getByText(/2 files: chapter-1\.txt, chapter-2\.txt/)).toBeVisible();
+  await page.getByRole('button', { name: 'Start learning' }).click();
+  await expect(page).toHaveURL(/\/app\/a\//);
+  await expect.poll(() => m.db.study_sources.length).toBe(2);
+  expect(m.db.study_sources.map((s) => s.file_name).sort()).toEqual(['chapter-1.txt', 'chapter-2.txt']);
 });
 
 test('writing saves as you go, and is there after a reload', async ({ page }) => {

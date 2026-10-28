@@ -29,6 +29,11 @@ export function Modal({
   const panel = useRef<HTMLDivElement>(null);
   const id = useId();
   const titleId = labelledBy ?? `${id}-title`;
+  // The latest onClose, without setting the dialog up again: most callers pass a new function
+  // on every render, and setting up again on each keystroke threw the cursor back to the first
+  // field (and the keyboard down and up on a phone).
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
 
   useEffect(() => {
     if (!open) return;
@@ -36,7 +41,7 @@ export function Modal({
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         e.stopPropagation();
-        onClose();
+        closeRef.current();
       }
     };
     window.addEventListener('keydown', onKey);
@@ -49,7 +54,7 @@ export function Modal({
       clearTimeout(t);
       before?.focus?.();
     };
-  }, [open, onClose]);
+  }, [open]);
 
   return createPortal(
     <AnimatePresence>
