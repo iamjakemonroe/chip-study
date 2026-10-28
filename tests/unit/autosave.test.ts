@@ -148,6 +148,24 @@ describe('autosave', () => {
     await vi.advanceTimersByTimeAsync(1000);
     expect(s.calls).toBe(0);
   });
+
+  it('saves on while a screen still holds it (set up, taken down, set up again)', async () => {
+    const s = server();
+    const a = new Autosaver<string>(1, { save: s.save, delay: 100 });
+    a.hold();
+    // Taken down: its last flush lets go only after the screen is set up again.
+    const letGo = a.flush().finally(() => a.release());
+    a.hold();
+    await letGo;
+    a.change('still saving');
+    await vi.advanceTimersByTimeAsync(200);
+    expect(s.saved).toEqual(['still saving']);
+    // The last screen goes: it stops.
+    a.release();
+    a.change('after');
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(s.saved).toEqual(['still saving']);
+  });
 });
 
 describe('word count', () => {

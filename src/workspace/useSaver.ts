@@ -93,6 +93,7 @@ export function useSaver(doc: StudyDocument) {
   }, [doc.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
+    saver.hold();
     const flush = () => void saver.flush();
     const onHide = () => document.visibilityState === 'hidden' && flush();
     document.addEventListener('visibilitychange', onHide);
@@ -109,7 +110,7 @@ export function useSaver(doc: StudyDocument) {
       document.removeEventListener('visibilitychange', onHide);
       window.removeEventListener('pagehide', flush);
       window.removeEventListener('beforeunload', beforeUnload);
-      void saver.flush().finally(() => saver.dispose());
+      void saver.flush().finally(() => saver.release());
       if (backupTimer.current) clearTimeout(backupTimer.current);
     };
   }, [saver]);

@@ -32,6 +32,7 @@ export class Autosaver<T> {
   private longest: ReturnType<typeof setTimeout> | null = null;
   private failures = 0;
   private stopped = false;
+  private holds = 0;
   private current: SaveState = 'saved';
   /** The version the server has when there's a conflict. */
   theirs: number | null = null;
@@ -139,6 +140,19 @@ export class Autosaver<T> {
     }
     this.set('pending');
     return this.run();
+  }
+
+  /** In use by one more screen. React can set a screen up, take it down and set it up again
+   * (StrictMode does, in development): it saves on until the last one has let go. */
+  hold() {
+    this.holds += 1;
+    this.stopped = false;
+  }
+
+  /** A screen is done with it: once none is left, it stops. */
+  release() {
+    this.holds = Math.max(0, this.holds - 1);
+    if (this.holds === 0) this.dispose();
   }
 
   dispose() {

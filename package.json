@@ -10,6 +10,7 @@
     "typecheck": "tsc -b",
     "test": "vitest run",
     "e2e": "playwright test",
+    "e2e:dev": "playwright test -c playwright.dev.config.ts",
     "check": "npm run typecheck && npm test && npm run build && npm run e2e",
     "deploy": "npm run build && npx wrangler deploy",
     "lint": "eslint ."
