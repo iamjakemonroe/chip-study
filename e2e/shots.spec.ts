@@ -5,17 +5,18 @@ import { MockBackend } from './mock';
 /** Every main screen at each size, saved under shots/ to look at, and checked for anything
  * pushed off the side of the screen. */
 
-const dir = (name: string, project: string) => `shots/${project}/${name}.png`;
+const dir = (name: string, project: string) => `${process.env.SHOTS_DIR ?? 'shots'}/${project}/${name}.png`;
 
 async function noSideScroll(page: Page) {
   await nothingClipped(page);
 }
 
 test('landing', async ({ page }, info) => {
+  test.setTimeout(240_000);
   const m = new MockBackend();
   await m.install(page, { signedIn: false });
   await page.goto('/');
-  await expect(page.getByRole('heading', { level: 1 })).toContainText('your best work');
+  await expect(page.getByRole('heading', { level: 1 })).toContainText('Understand anything');
   await page.waitForTimeout(1600);
   await noSideScroll(page);
   await page.screenshot({ path: dir('landing-top', info.project.name) });
@@ -103,4 +104,42 @@ test('plan page', async ({ page }, info) => {
   await expect(page.getByText('Coming soon')).toBeVisible();
   await noSideScroll(page);
   await page.screenshot({ path: dir('plan', info.project.name), fullPage: true });
+});
+
+test('review and progress', async ({ page }, info) => {
+  const m = new MockBackend();
+  for (const [front, back, reps, interval] of [
+    ['What is the product rule?', '(uv)′ = u·v′ + v·u′', 0, 0],
+    ['Chain rule', 'd/dx f(g(x)) = f′(g(x))·g′(x)', 3, 30],
+    ['Derivative of $\\sin x$', '$\\cos x$', 2, 6],
+  ] as const) {
+    m.insert('study_cards', { front, back, reps, interval_days: interval, due_at: interval ? new Date(Date.now() + interval * 86_400_000).toISOString() : new Date().toISOString() });
+  }
+  m.insert('study_practice', { kind: 'quiz', correct: 4, total: 5 });
+  m.insert('study_focus', { minutes: 50 });
+  await m.install(page);
+  await page.goto('/app/review');
+  await expect(page.getByText('1 card to review')).toBeVisible();
+  await noSideScroll(page);
+  await page.screenshot({ path: dir('review', info.project.name), fullPage: true });
+  await page.getByRole('button', { name: 'Start reviewing' }).click();
+  await page.getByRole('button', { name: 'Show the answer' }).click();
+  await noSideScroll(page);
+  await page.screenshot({ path: dir('review-card', info.project.name) });
+});
+
+test('something to learn, with Chip guiding', async ({ page }, info) => {
+  const m = new MockBackend();
+  m.seedAssignment({ title: 'Calculus: derivatives', course: 'MATH 120', kind: 'topic', brief: 'Differentiate products and compositions for my exam.', rubric: '', word_target: null });
+  await m.install(page);
+  await page.goto('/app');
+  await page.getByRole('link', { name: /Calculus: derivatives/ }).first().click();
+  await expect(page.locator('.doc-prose')).toBeVisible();
+  if ((page.viewportSize()?.width ?? 0) < 1100) await page.getByRole('navigation', { name: 'Workspace' }).getByRole('button', { name: 'Chip' }).click();
+  await page.getByRole('textbox', { name: 'Message to Chip' }).fill('How do I differentiate x·eˣ?');
+  await page.getByRole('button', { name: 'Send' }).click();
+  await expect(page.getByText('Before I tell you')).toBeVisible();
+  await page.waitForTimeout(600);
+  await noSideScroll(page);
+  await page.screenshot({ path: dir('topic-guide', info.project.name) });
 });

@@ -295,6 +295,7 @@ const latin = (t: string) =>
     .replace(/[“”]/g, '"')
     .replace(/[–—]/g, '-')
     .replace(/…/g, '...')
+    // eslint-disable-next-line no-control-regex -- tabs and line breaks are kept on purpose
     .replace(/[^\x09\x0A\x0D\x20-\x7E\xA0-\xFF]/g, '?');
 
 export async function declarationPdf(d: Declaration): Promise<Blob> {
