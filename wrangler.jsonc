@@ -1,0 +1,14 @@
+// Cloudflare Worker for study.kaivon.app: the web app (dist), nothing else. Chip's brain is the
+// chip-study edge function on Utopia's Supabase project.
+// Deploy: npm run deploy (after node scripts/env.mjs)
+{
+  "name": "chip-study-web",
+  "compatibility_date": "2026-10-01",
+  "assets": {
+    "directory": "./dist",
+    "not_found_handling": "single-page-application"
+  },
+  "routes": [{ "pattern": "study.kaivon.app", "custom_domain": true }],
+  "workers_dev": true,
+  "preview_urls": false
+}

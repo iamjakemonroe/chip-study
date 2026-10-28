@@ -1,0 +1,13 @@
+node_modules
+dist
+dist-e2e
+dist-ssr
+.env*
+!.env.e2e
+!.env.example
+.wrangler
+test-results
+playwright-report
+shots
+*.log
+.DS_Store

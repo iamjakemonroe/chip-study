@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Chip Study: understand anything, with a tutor on your side</title>
+    <meta name="description" content="Chip Study is a calm place to study and really learn. Chip, your AI tutor, guides you step by step, checks your work and tells you why, turns your notes into practice that sticks, and helps with assignments honestly." />
+    <meta name="theme-color" content="#f7f7fb" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="icon" href="/favicon.png" type="image/png" sizes="64x64" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="Chip Study" />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://study.kaivon.app/" />
+    <meta property="og:title" content="Chip Study: understand anything, really learn it" />
+    <meta property="og:description" content="A calm place to study, with Chip: a tutor that guides you step by step, checks your work, turns your notes into practice that sticks, and helps with assignments honestly." />
+    <meta property="og:image" content="https://study.kaivon.app/og.png" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <style>
+      html, body { background: #f7f7fb; margin: 0; }
+      #boot { position: fixed; inset: 0; display: grid; place-items: center; }
+      #boot i { width: 40px; height: 40px; border-radius: 50%; background: radial-gradient(circle at 32% 28%, #fff 0%, #c9c3ff 18%, #8b7dff 46%, #4fb4f0 78%, #5fd8b6 100%); box-shadow: 0 6px 22px rgb(100 87 240 / 0.35); animation: b 1.6s ease-in-out infinite; }
+      @keyframes b { 50% { transform: scale(1.08); } }
+      @media (prefers-reduced-motion: reduce) { #boot i { animation: none; } }
+    </style>
+  </head>
+  <body>
+    <div id="root"><div id="boot" aria-hidden="true"><i></i></div></div>
+    <noscript>Chip Study needs JavaScript switched on.</noscript>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

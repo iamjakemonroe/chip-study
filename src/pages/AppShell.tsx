@@ -1,0 +1,47 @@
+import { useEffect } from 'react';
+import { Navigate, Outlet, useLocation } from 'react-router';
+import { Orb } from '../components/Orb.tsx';
+import { useAuth } from '../store/auth.ts';
+import { useFocus } from '../store/focus.ts';
+
+/** The signed-in app: everything under /app. Someone signed out is sent to sign in, and back
+ * here after. */
+export function AppShell() {
+  const ready = useAuth((s) => s.ready);
+  const session = useAuth((s) => s.session);
+  const where = useLocation();
+
+  if (!ready) {
+    return (
+      <div className="grid min-h-dvh place-items-center">
+        <div className="daylight" />
+        <Orb size={44} state="thinking" />
+      </div>
+    );
+  }
+  if (!session) return <Navigate to={`/signin?next=${encodeURIComponent(where.pathname + where.search)}`} replace />;
+  return (
+    <>
+      <div className="daylight" />
+      <FocusTicker />
+      <Outlet />
+    </>
+  );
+}
+
+/** Moves the focus timer on while the app is open (and catches up after a sleep). */
+function FocusTicker() {
+  const running = useFocus((s) => s.running);
+  useEffect(() => {
+    if (!running) return;
+    const tick = () => useFocus.getState().tick();
+    tick();
+    const id = setInterval(tick, 1000);
+    document.addEventListener('visibilitychange', tick);
+    return () => {
+      clearInterval(id);
+      document.removeEventListener('visibilitychange', tick);
+    };
+  }, [running]);
+  return null;
+}
