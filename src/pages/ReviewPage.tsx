@@ -115,7 +115,7 @@ export function ReviewPage() {
         ) : (
           <section className="mt-8 grid gap-4 md:grid-cols-[1.4fr_1fr]">
             <div className="card relative overflow-hidden p-6 sm:p-8">
-              <span className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full bg-iris-soft blur-3xl" aria-hidden="true" />
+              <span className="glow-spot pointer-events-none absolute -right-24 -top-24 h-80 w-80" style={{ ['--glow' as string]: 'var(--color-iris-soft)' }} aria-hidden="true" />
               <div className="relative">
                 <Orb size={48} />
                 {dueNow.length > 0 ? (

@@ -171,7 +171,7 @@ export function PlanCard({
 }) {
   return (
     <div className={`relative overflow-hidden rounded-[1.75rem] border bg-white p-6 sm:p-8 ${glow ? 'border-iris/25 shadow-[0_20px_60px_rgb(100_87_240/0.14)]' : 'border-line shadow-[var(--shadow-soft)]'}`}>
-      {glow && <span className="pointer-events-none absolute -right-16 -top-16 h-48 w-48 rounded-full bg-iris-soft blur-3xl" aria-hidden="true" />}
+      {glow && <span className="glow-spot pointer-events-none absolute -right-24 -top-24 h-72 w-72" style={{ ['--glow' as string]: 'var(--color-iris-soft)' }} aria-hidden="true" />}
       <div className="relative">
         <div className="flex items-center gap-3">
           {glow ? <Orb size={30} /> : <span className="grid h-[30px] w-[30px] place-items-center rounded-full bg-sky-soft text-sky"><Zap size={16} /></span>}

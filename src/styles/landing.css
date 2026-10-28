@@ -274,8 +274,7 @@
   width: 9rem;
   height: 9rem;
   border-radius: 50%;
-  background: #e2f6f0;
-  filter: blur(40px);
+  background: radial-gradient(circle, #d8f3ea 0%, transparent 70%);
   z-index: -1;
 }
 .l-bar {
@@ -300,10 +299,10 @@
   border: 1px solid rgb(255 255 255 / 0.9);
   transition: background-color 0.8s var(--ease-calm);
 }
-.l-focus .fs-blob { filter: blur(50px); transition: background-color 0.8s var(--ease-calm); }
-.l-focus .fs-a { width: 26rem; height: 26rem; left: -8rem; top: -10rem; }
-.l-focus .fs-b { width: 22rem; height: 22rem; right: -8rem; top: 4rem; }
-.l-focus .fs-c { width: 20rem; height: 20rem; left: 30%; bottom: -12rem; }
+.l-focus .fs-blob { transition: opacity 0.8s var(--ease-calm); }
+.l-focus .fs-a { width: 34rem; height: 34rem; left: -12rem; top: -14rem; }
+.l-focus .fs-b { width: 30rem; height: 30rem; right: -12rem; top: 1rem; }
+.l-focus .fs-c { width: 28rem; height: 28rem; left: 25%; bottom: -16rem; }
 .l-swatch {
   width: 1.75rem;
   height: 1.75rem;
@@ -380,8 +379,7 @@
   width: 14rem;
   height: 14rem;
   border-radius: 50%;
-  background: var(--color-iris-soft);
-  filter: blur(40px);
+  background: radial-gradient(circle, #e4e0ff 0%, transparent 70%);
   z-index: 0;
 }
 .l-price > * { position: relative; }
@@ -452,12 +450,11 @@
   content: '';
   position: absolute;
   border-radius: 50%;
-  filter: blur(60px);
   z-index: -1;
   animation: drift 20s var(--ease-calm) infinite;
 }
-.l-cta::before { width: 22rem; height: 22rem; left: -6rem; top: -8rem; background: #ddd5ff; }
-.l-cta::after { width: 20rem; height: 20rem; right: -6rem; bottom: -9rem; background: #c9f0e2; animation-delay: -8s; }
+.l-cta::before { width: 30rem; height: 30rem; left: -10rem; top: -12rem; background: radial-gradient(circle, #ddd5ff 0%, transparent 70%); }
+.l-cta::after { width: 28rem; height: 28rem; right: -10rem; bottom: -13rem; background: radial-gradient(circle, #c9f0e2 0%, transparent 70%); animation-delay: -8s; }
 
 /* The workspace in miniature. */
 .l-show {

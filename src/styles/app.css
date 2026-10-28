@@ -72,7 +72,6 @@
 @layer base {
   html {
     -webkit-text-size-adjust: 100%;
-    text-rendering: optimizeLegibility;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     color-scheme: light;
@@ -124,7 +123,6 @@
   width: 70vmax;
   height: 70vmax;
   border-radius: 50%;
-  filter: blur(80px);
   opacity: 0.55;
 }
 .daylight::before {
@@ -139,6 +137,10 @@
 }
 
 /* Glass card. */
+.glow-spot {
+  border-radius: 50%;
+  background: radial-gradient(circle, var(--glow) 0%, transparent 70%);
+}
 .glass {
   background: rgb(255 255 255 / 0.78);
   -webkit-backdrop-filter: saturate(1.4) blur(14px);
@@ -378,8 +380,8 @@
 .signin-blob {
   position: absolute;
   border-radius: 50%;
-  filter: blur(40px);
-  opacity: 0.7;
+  background: radial-gradient(circle, var(--c) 0%, transparent 68%);
+  opacity: 0.9;
   animation: drift 18s var(--ease-calm) infinite;
   will-change: transform;
 }
@@ -388,14 +390,14 @@
   height: 26rem;
   left: -6rem;
   top: -5rem;
-  background: #d9d2ff;
+  --c: #d9d2ff;
 }
 .signin-blob-b {
   width: 22rem;
   height: 22rem;
   right: -5rem;
   top: 30%;
-  background: #c8ebff;
+  --c: #c8ebff;
   animation-delay: -6s;
 }
 .signin-blob-c {
@@ -403,7 +405,7 @@
   height: 20rem;
   left: 20%;
   bottom: -7rem;
-  background: #ccf3e3;
+  --c: #ccf3e3;
   animation-delay: -12s;
 }
 
@@ -688,8 +690,8 @@
 .fs-blob {
   position: absolute;
   border-radius: 50%;
-  filter: blur(70px);
-  opacity: 0.75;
+  background: radial-gradient(circle, var(--c) 0%, transparent 70%);
+  opacity: 0.95;
   will-change: transform;
   animation: drift 26s var(--ease-calm) infinite;
 }
@@ -697,21 +699,21 @@
 .fs-b { width: 50vmax; height: 50vmax; right: -15vmax; top: 15vh; animation-delay: -9s; animation-duration: 32s; }
 .fs-c { width: 45vmax; height: 45vmax; left: 20vw; bottom: -25vmax; animation-delay: -17s; animation-duration: 38s; }
 .scene-dawn { background: #fff7f2; }
-.scene-dawn .fs-a { background: #ffd9c4; }
-.scene-dawn .fs-b { background: #e5dbff; }
-.scene-dawn .fs-c { background: #ffe9c7; }
+.scene-dawn .fs-a { --c: #ffd9c4; }
+.scene-dawn .fs-b { --c: #e5dbff; }
+.scene-dawn .fs-c { --c: #ffe9c7; }
 .scene-sea { background: #f2fbff; }
-.scene-sea .fs-a { background: #c9ecff; }
-.scene-sea .fs-b { background: #c8f2e3; }
-.scene-sea .fs-c { background: #dfe5ff; }
+.scene-sea .fs-a { --c: #c9ecff; }
+.scene-sea .fs-b { --c: #c8f2e3; }
+.scene-sea .fs-c { --c: #dfe5ff; }
 .scene-forest { background: #f6faf2; }
-.scene-forest .fs-a { background: #d3efd4; }
-.scene-forest .fs-b { background: #efe6c6; }
-.scene-forest .fs-c { background: #cdeee3; }
+.scene-forest .fs-a { --c: #d3efd4; }
+.scene-forest .fs-b { --c: #efe6c6; }
+.scene-forest .fs-c { --c: #cdeee3; }
 .scene-night { background: #12142b; }
-.scene-night .fs-a { background: #2c2a6b; opacity: 0.9; }
-.scene-night .fs-b { background: #1d3f6b; opacity: 0.8; }
-.scene-night .fs-c { background: #3b2560; opacity: 0.7; }
+.scene-night .fs-a { --c: #2c2a6b; opacity: 0.9; }
+.scene-night .fs-b { --c: #1d3f6b; opacity: 0.8; }
+.scene-night .fs-c { --c: #3b2560; opacity: 0.7; }
 .fs-stars {
   position: absolute;
   inset: 0;

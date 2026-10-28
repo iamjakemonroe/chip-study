@@ -13,6 +13,15 @@ interface Backup {
 
 const backupKey = (id: string) => `chip-study-doc-${id}`;
 
+/** [fn]'s answer when the browser next has a moment (reading a long document is the one heavy
+ * thing saving does, so it waits for a gap between keystrokes). */
+function whenIdle<T>(fn: () => T): Promise<T> {
+  return new Promise((resolve) => {
+    if ('requestIdleCallback' in window) requestIdleCallback(() => resolve(fn()), { timeout: 600 });
+    else setTimeout(() => resolve(fn()), 1);
+  });
+}
+
 export function readBackup(doc: StudyDocument): DocSnapshot | null {
   try {
     const raw = localStorage.getItem(backupKey(doc.id));
@@ -44,18 +53,22 @@ export function useSaver(doc: StudyDocument) {
   const saver = useMemo(() => {
     const keepBackup = (version: number) => {
       if (backupTimer.current) clearTimeout(backupTimer.current);
-      backupTimer.current = setTimeout(() => {
-        if (!latest.current) return;
-        try {
-          localStorage.setItem(backupKey(doc.id), JSON.stringify({ version, at: Date.now(), snapshot: latest.current() } satisfies Backup));
-        } catch {
-          // Storage full or private: the server copy will do.
-        }
-      }, 1500);
+      backupTimer.current = setTimeout(
+        () =>
+          void whenIdle(() => {
+            if (!latest.current) return;
+            try {
+              localStorage.setItem(backupKey(doc.id), JSON.stringify({ version, at: Date.now(), snapshot: latest.current() } satisfies Backup));
+            } catch {
+              // Storage full or private: the server copy will do.
+            }
+          }),
+        1500,
+      );
     };
     const s: Autosaver<() => DocSnapshot> = new Autosaver<() => DocSnapshot>(doc.version, {
       save: async (read, version) => {
-        const snapshot = read();
+        const snapshot = await whenIdle(read);
         const answer = await saveDocument(doc.id, version, snapshot);
         if (answer.ok) {
           const { docs, assignment } = useWorkspace.getState();

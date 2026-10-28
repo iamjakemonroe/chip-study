@@ -1,4 +1,5 @@
 import type { Editor } from '@tiptap/core';
+import type { Node as PMNode } from '@tiptap/pm/model';
 import { EditorContent, useEditor } from '@tiptap/react';
 import { BubbleMenu } from '@tiptap/react/menus';
 import katex from 'katex';
@@ -18,10 +19,29 @@ import { clearBackup, readBackup, useSaver } from './useSaver.ts';
 
 const EMPTY = { type: 'doc', content: [{ type: 'paragraph' }] };
 
-function snapshot(editor: Editor): DocSnapshot {
+/** The document's text and counts, worked out once for each version of it (documents never
+ * change in place, so the same one is the same text): the word count and a save share it. */
+type Measure = { doc: PMNode; text: string; words: number; chipWords: number };
+const measured = new WeakMap<Editor, Measure>();
+
+function measure(editor: Editor): Measure {
+  const doc = editor.state.doc;
+  const last = measured.get(editor);
+  if (last?.doc === doc) return last;
   const text = plainText(editor);
-  return { content: editor.getJSON() as Record<string, unknown>, text, words: countWords(text), chipWords: chipWordCount(editor.state.doc) };
+  const m = { doc, text, words: countWords(text), chipWords: chipWordCount(doc) };
+  measured.set(editor, m);
+  return m;
 }
+
+function snapshot(editor: Editor): DocSnapshot {
+  const { text, words, chipWords } = measure(editor);
+  return { content: editor.getJSON() as Record<string, unknown>, text, words, chipWords };
+}
+
+/** Runs [fn] when the browser has a moment, so counting never lands in the middle of typing. */
+const whenIdle = (fn: () => void) =>
+  'requestIdleCallback' in window ? requestIdleCallback(fn, { timeout: 1000 }) : setTimeout(fn, 1);
 
 /** The writing surface: a calm page, the tools above it, saving as you go. */
 export function DocEditor({ doc, onAskChip }: { doc: StudyDocument; onAskChip: (mode: 'explain' | 'write' | 'check', text: string) => void }) {
@@ -35,10 +55,16 @@ export function DocEditor({ doc, onAskChip }: { doc: StudyDocument; onAskChip: (
 
   const counts = (editor: Editor) => {
     if (countTimer.current) clearTimeout(countTimer.current);
-    countTimer.current = setTimeout(() => {
-      const text = plainText(editor);
-      useWorkspace.setState({ words: countWords(text), chipWords: chipWordCount(editor.state.doc) });
-    }, 350);
+    countTimer.current = setTimeout(
+      () =>
+        whenIdle(() => {
+          if (editor.isDestroyed) return;
+          const { words, chipWords } = measure(editor);
+          const st = useWorkspace.getState();
+          if (st.words !== words || st.chipWords !== chipWords) useWorkspace.setState({ words, chipWords });
+        }),
+      400,
+    );
   };
 
   const content = useMemo(() => {

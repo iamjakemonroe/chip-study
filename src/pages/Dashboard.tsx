@@ -225,7 +225,7 @@ export function Dashboard() {
                       to={`/app/a/${a.id}`}
                       className="card relative flex h-full flex-col overflow-hidden p-5 transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[var(--shadow-lift)]"
                     >
-                      <span className="absolute -right-10 -top-10 h-32 w-32 rounded-full opacity-70 blur-2xl" style={{ background: c.soft }} aria-hidden="true" />
+                      <span className="glow-spot absolute -right-16 -top-16 h-44 w-44" style={{ ['--glow' as string]: c.soft }} aria-hidden="true" />
                       <div className="relative flex items-start gap-3 pr-8">
                         <span className="mt-1 h-2.5 w-2.5 flex-none rounded-full" style={{ background: c.ink }} />
                         <div className="min-w-0">
@@ -341,7 +341,7 @@ export function Dashboard() {
 function ReviewCard({ due, streak: days }: { due: number; streak: number }) {
   return (
     <div className="card relative flex h-full flex-col overflow-hidden p-5">
-      <span className="absolute -right-12 -top-12 h-36 w-36 rounded-full bg-lilac-soft opacity-90 blur-2xl" aria-hidden="true" />
+      <span className="glow-spot absolute -right-16 -top-16 h-48 w-48" style={{ ['--glow' as string]: 'var(--color-lilac-soft)' }} aria-hidden="true" />
       <div className="relative flex items-center justify-between">
         <h2 className="text-sm font-semibold text-ink-2">Review</h2>
         <span className="chip-tag bg-peach-soft text-[#b25a22]" title="Days in a row you’ve studied">
@@ -430,7 +430,7 @@ function ChipCard() {
   const main = best ?? fast;
   return (
     <div className="card relative flex h-full flex-col overflow-hidden p-5">
-      <span className="absolute -right-12 -top-12 h-36 w-36 rounded-full bg-iris-soft opacity-80 blur-2xl" aria-hidden="true" />
+      <span className="glow-spot absolute -right-16 -top-16 h-48 w-48" style={{ ['--glow' as string]: 'var(--color-iris-soft)' }} aria-hidden="true" />
       <div className="relative flex items-center justify-between">
         <h2 className="text-sm font-semibold text-ink-2">Chip time</h2>
         <span className={`chip-tag ${me?.tier === 'pro' ? 'bg-iris-soft text-iris-2' : 'bg-paper-2 text-ink-3'}`}>{me?.tier === 'pro' ? 'Pro' : 'Free'}</span>
