@@ -457,6 +457,81 @@
   .chip-loader-dots i { opacity: 0.6; }
 }
 
+/* ── Chip's focus tip: a little conversation the first time focus starts ── */
+.focus-tip-dock {
+  position: fixed;
+  left: 50%;
+  bottom: calc(1.25rem + env(safe-area-inset-bottom));
+  z-index: 60;
+  width: min(22.5rem, calc(100vw - 2rem));
+  translate: -50% 0;
+}
+.focus-tip-dock.under-bar {
+  top: 4.75rem;
+  bottom: auto;
+}
+.focus-tip {
+  padding: 0.85rem 0.9rem 0.7rem;
+  border-radius: 1.4rem;
+  background: rgb(255 255 255 / 0.96);
+  border: 1px solid rgb(255 255 255 / 0.95);
+  box-shadow: var(--shadow-lift);
+  color: var(--color-ink);
+}
+.focus-tip-bubble {
+  width: fit-content;
+  max-width: 100%;
+  padding: 0.5rem 0.75rem;
+  border-radius: 1rem 1rem 1rem 0.35rem;
+  background: var(--color-iris-soft);
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+.focus-tip-typing {
+  display: inline-flex;
+  gap: 4px;
+  padding: 0.7rem 0.8rem;
+}
+.focus-tip-typing i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--color-iris);
+  opacity: 0.35;
+  animation: tip-dot 1.1s var(--ease-calm) infinite;
+}
+.focus-tip-typing i:nth-child(2) { animation-delay: 0.15s; }
+.focus-tip-typing i:nth-child(3) { animation-delay: 0.3s; }
+@keyframes tip-dot {
+  0%, 100% { transform: translateY(0); opacity: 0.35; }
+  35% { transform: translateY(-3px); opacity: 0.9; }
+}
+.focus-tip-steps {
+  display: flex;
+  justify-content: center;
+  gap: 5px;
+  margin-top: 0.65rem;
+}
+.focus-tip-steps i {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--color-line-2);
+  transition: width 0.35s var(--ease-calm), background-color 0.35s var(--ease-calm);
+}
+.focus-tip-steps i.on {
+  width: 16px;
+  background: var(--color-iris);
+}
+/* Settings, opened from the tip: the focus timer glows for a moment so it's found. */
+.settings-glow {
+  animation: settings-glow 2.2s var(--ease-calm) 0.3s 1;
+}
+@keyframes settings-glow {
+  0%, 100% { box-shadow: var(--shadow-soft), 0 0 0 0 rgb(100 87 240 / 0); }
+  30%, 60% { box-shadow: var(--shadow-soft), 0 0 0 4px rgb(100 87 240 / 0.28); }
+}
+
 /* ── Sign in ────────────────────────────────────────────────────────── */
 .signin-art {
   background: linear-gradient(160deg, #f3f0ff 0%, #eaf6ff 55%, #eafaf4 100%);

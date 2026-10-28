@@ -1,5 +1,7 @@
+import { AnimatePresence } from 'framer-motion';
 import { CloudRain, Pause, Play, SkipForward, Volume2, VolumeX, Waves, Wind, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import { FocusTip, focusTipSeen } from '../components/FocusTip.tsx';
 import { playAmbient, stopAmbient } from '../lib/sound.ts';
 import { clock, remaining, useFocus } from '../store/focus.ts';
 import { usePrefs, type SceneName } from '../store/prefs.ts';
@@ -35,6 +37,7 @@ export function FocusBar() {
   const prefs = usePrefs();
   const [, tick] = useState(0);
   const assignmentId = useWorkspace((s) => s.assignment?.id ?? null);
+  const [tip, setTip] = useState(() => !focusTipSeen());
 
   useEffect(() => {
     if (!running) return;
@@ -117,6 +120,7 @@ export function FocusBar() {
       <button className="btn btn-quiet btn-sm h-9" onClick={() => useWorkspace.setState({ focusMode: false })}>
         <X size={15} /> Leave
       </button>
+      <AnimatePresence>{tip && <FocusTip underBar onClose={() => setTip(false)} />}</AnimatePresence>
     </div>
   );
 }

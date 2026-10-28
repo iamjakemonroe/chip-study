@@ -1,6 +1,6 @@
 import { LogOut, Trash2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import { Link, useNavigate } from 'react-router';
+import { Link, useLocation, useNavigate } from 'react-router';
 import { TopBar } from '../components/TopBar.tsx';
 import { Confirm, Segmented } from '../components/ui.tsx';
 import { forgetMe } from '../lib/api.ts';
@@ -21,6 +21,13 @@ export function Settings() {
   useEffect(() => {
     document.title = 'Settings · Chip Study';
   }, []);
+
+  // Sent here to change the focus time (Chip's tip): straight to it, glowing for a moment.
+  const where = useLocation();
+  const glowFocus = where.hash === '#focus';
+  useEffect(() => {
+    if (glowFocus) document.getElementById('focus')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, [glowFocus]);
 
   return (
     <div className="min-h-dvh">
@@ -79,18 +86,21 @@ export function Settings() {
           <p className="text-sm text-ink-3">Best is Chip’s deepest thinker (with Pro). Fast answers quickly and goes further.</p>
         </Section>
 
-        <Section title="Focus">
+        <Section title="Focus" id="focus" glow={glowFocus}>
           <Row
-            label="Timer"
+            label="Focus time"
             value={
               <Segmented
-                label="Focus timer"
+                label="Focus time"
                 value={String(plan.focus)}
                 onChange={(v) => useFocus.getState().setPlan(PLANS.find((p) => String(p.plan.focus) === v)!.plan)}
-                options={PLANS.map((p) => ({ value: String(p.plan.focus), label: p.name }))}
+                options={PLANS.map((p) => ({ value: String(p.plan.focus), label: `${p.plan.focus} min` }))}
               />
             }
           />
+          <p className="text-sm text-ink-3">
+            {plan.focus} minutes of focus, then a {plan.short}-minute break, and a longer {plan.long}-minute one after every {plan.every}.
+          </p>
         </Section>
 
         <Section title="Your data">
@@ -133,9 +143,9 @@ export function Settings() {
   );
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function Section({ title, children, id, glow = false }: { title: string; children: React.ReactNode; id?: string; glow?: boolean }) {
   return (
-    <section className="card mt-6 p-5 sm:p-6">
+    <section id={id} className={`card mt-6 scroll-mt-24 p-5 sm:p-6 ${glow ? 'settings-glow' : ''}`}>
       <h2 className="mb-3 text-sm font-semibold uppercase tracking-[0.08em] text-ink-3">{title}</h2>
       {children}
     </section>

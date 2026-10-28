@@ -1,7 +1,8 @@
-import { motion, useReducedMotion } from 'framer-motion';
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { Archive, ArrowRight, CheckCircle2, Circle, Clock, Flame, GraduationCap, Layers, MoreHorizontal, Pause, Play, Plus, Sparkles, Trash2, Undo2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router';
+import { FocusTip, focusTipSeen } from '../components/FocusTip.tsx';
 import { NewAssignment } from '../components/NewAssignment.tsx';
 import { Orb } from '../components/Orb.tsx';
 import { TopBar } from '../components/TopBar.tsx';
@@ -399,6 +400,7 @@ function FocusCard({ sessions }: { sessions: FocusSession[] }) {
   const today = per.get(days[6]) ?? 0;
   const max = Math.max(60, ...days.map((d) => per.get(d) ?? 0));
   const ms = remaining({ running, endsAt, left });
+  const [tip, setTip] = useState(false);
 
   return (
     <div className="card flex h-full flex-col p-5">
@@ -427,7 +429,11 @@ function FocusCard({ sessions }: { sessions: FocusSession[] }) {
       <div className="mt-auto flex items-center gap-2 pt-4">
         <button
           className={`btn btn-sm ${running ? 'btn-ghost' : 'btn-primary'}`}
-          onClick={() => (running ? useFocus.getState().pause() : useFocus.getState().start(null))}
+          onClick={() => {
+            if (running) return useFocus.getState().pause();
+            useFocus.getState().start(null);
+            if (!focusTipSeen()) setTip(true);
+          }}
         >
           {running ? <Pause size={15} /> : <Play size={15} />}
           {running ? 'Pause' : ms < plan.focus * 60000 && phase === 'focus' ? 'Carry on' : 'Start focus'}
@@ -436,6 +442,7 @@ function FocusCard({ sessions }: { sessions: FocusSession[] }) {
           {clock(ms)} {phase !== 'focus' && 'break'}
         </span>
       </div>
+      <AnimatePresence>{tip && <FocusTip onClose={() => setTip(false)} />}</AnimatePresence>
     </div>
   );
 }
