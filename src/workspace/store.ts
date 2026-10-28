@@ -74,9 +74,18 @@ export const useWorkspace = create<WorkspaceState>((set) => ({
   reset: () => set(empty),
 }));
 
+let liveDoc: Editor | null = null;
+
 /** The rich-text editor of the open document, for Chip to read from and write into. */
 export const editors: { doc: Editor | null; text: () => string; pending: string | null } = {
-  doc: null,
+  /** Never one that's been destroyed (a change of document, or React's StrictMode, makes and
+   * destroys editors): reading one throws "Cannot read properties of null (reading 'nodes')". */
+  get doc() {
+    return liveDoc && !liveDoc.isDestroyed ? liveDoc : null;
+  },
+  set doc(editor: Editor | null) {
+    liveDoc = editor;
+  },
   /** The active document as plain text (a doc, code, or a table as CSV). */
   text: () => '',
   /** Something to put in the main document when it next opens (a table from the table tool). */

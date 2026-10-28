@@ -82,8 +82,6 @@ export function DocEditor({ doc, onAskChip }: { doc: StudyDocument; onAskChip: (
         attributes: { class: 'doc-prose', 'aria-label': `${doc.title}: your document`, spellcheck: 'true', 'aria-multiline': 'true', role: 'textbox' },
       },
       onCreate: ({ editor: e }) => {
-        editors.doc = e;
-        editors.text = () => plainText(e);
         counts(e);
         if (readBackup(doc)) {
           saver.change(() => snapshot(e));
@@ -111,16 +109,20 @@ export function DocEditor({ doc, onAskChip }: { doc: StudyDocument; onAskChip: (
     [doc.id],
   );
 
-  useEffect(
-    () => () => {
+  // Chip and the panels reach the editor that's on screen: set here, from the live one, rather
+  // than when an editor is made (React's StrictMode makes one and destroys it straight away).
+  useEffect(() => {
+    if (!editor) return;
+    editors.doc = editor;
+    editors.text = () => (editor.isDestroyed ? '' : plainText(editor));
+    return () => {
       if (editors.doc === editor) {
         editors.doc = null;
         editors.text = () => '';
       }
       if (countTimer.current) clearTimeout(countTimer.current);
-    },
-    [editor],
-  );
+    };
+  }, [editor]);
 
   // Citations follow their sources and the referencing style.
   const sources = useWorkspace((s) => s.sources);
