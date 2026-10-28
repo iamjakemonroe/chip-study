@@ -1,10 +1,11 @@
 import { ArrowRight, BookOpen, FileText, FileUp, GraduationCap, PenLine, Sparkles, Upload } from 'lucide-react';
 import { useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
-import { addSource, createAssignment } from '../lib/api.ts';
+import { createAssignment } from '../lib/api.ts';
 import { ChipRefused, readSheet, type Setup } from '../lib/chip.ts';
 import { COLOR_ORDER, COLORS } from '../lib/colors.ts';
 import { dueAtFrom } from '../lib/dates.ts';
+import { addReadings } from '../lib/readings.ts';
 import type { Color, Style } from '../lib/types.ts';
 import { useAuth } from '../store/auth.ts';
 import { toast } from '../store/toast.ts';
@@ -43,7 +44,7 @@ export function NewAssignment({ open, onClose, count, start = 'choose' }: { open
   const navigate = useNavigate();
   const me = useAuth((s) => s.me);
   const [step, setStep] = useState<'choose' | 'topic' | 'start' | 'reading' | 'form'>(start);
-  const [reading, setReading] = useState<File | null>(null);
+  const [readings, setReadings] = useState<File[]>([]);
   const readingInput = useRef<HTMLInputElement>(null);
   const [form, setForm] = useState<Form>(() => blank(COLOR_ORDER[count % COLOR_ORDER.length]));
   const [pasted, setPasted] = useState('');
@@ -56,7 +57,7 @@ export function NewAssignment({ open, onClose, count, start = 'choose' }: { open
     onClose();
     setTimeout(() => {
       setStep(start);
-      setReading(null);
+      setReadings([]);
       setForm(blank(COLOR_ORDER[(count + 1) % COLOR_ORDER.length]));
       setPasted('');
       setStatus('');
@@ -90,20 +91,43 @@ export function NewAssignment({ open, onClose, count, start = 'choose' }: { open
     }
   };
 
-  const fromFile = async (file: File) => {
+  /** The sheet from its files: the text taken out of PDFs and Word files, and the scans and
+   * photos Chip reads itself, all at once (up to 3 files, or 10 with Pro). */
+  const fromFiles = async (picked: File[]) => {
+    const most = me?.tier === 'pro' ? 10 : 3;
+    const files = picked.slice(0, most);
+    if (picked.length > most) toast(`Chip reads up to ${most} files at once${me?.tier === 'pro' ? '' : ' (10 with Pro)'}: the first ${most} it is.`, 'info');
     setStep('reading');
-    setStatus(`Opening ${file.name}…`);
     try {
       const { extractText, base64Of, mediaType, kindOf } = await import('../lib/extract.ts');
-      const kind = kindOf(file);
-      if (kind === 'other') throw new Error('Chip Study reads PDFs, Word files (.docx), text and photos.');
-      const { text } = kind === 'image' ? { text: '' } : await extractText(file);
-      if (text.trim().length >= 40) return await fromText(text);
-      // A scan or a photo: Chip reads the file itself.
       const max = (me?.uploads.max_mb ?? 4) * 1024 * 1024;
-      if (file.size > max) throw new Error(`That file is over ${me?.uploads.max_mb ?? 4} MB. Try a smaller one, or paste the text.`);
-      setStatus('Chip is reading your sheet…');
-      fill(await readSheet({ file: { media_type: mediaType(file), data: await base64Of(file) } }), '');
+      const texts: string[] = [];
+      const scans: { media_type: string; data: string }[] = [];
+      let bytes = 0;
+      for (const file of files) {
+        setStatus(`Opening ${file.name}…`);
+        const kind = kindOf(file);
+        if (kind === 'other') throw new Error(`${file.name}: Chip Study reads PDFs, Word files (.docx), text and photos.`);
+        const { text } = kind === 'image' ? { text: '' } : await extractText(file);
+        if (text.trim().length >= 40) {
+          texts.push(files.length > 1 ? `[${file.name}]\n${text.trim()}` : text);
+          continue;
+        }
+        // A scan or a photo: Chip reads the file itself.
+        bytes += file.size;
+        if (bytes > max) {
+          throw new Error(
+            files.length > 1
+              ? `Those files are over ${me?.uploads.max_mb ?? 4} MB together. Try fewer or smaller ones, or paste the text.`
+              : `That file is over ${me?.uploads.max_mb ?? 4} MB. Try a smaller one, or paste the text.`,
+          );
+        }
+        scans.push({ media_type: mediaType(file), data: await base64Of(file) });
+      }
+      const text = texts.join('\n\n');
+      if (!scans.length) return await fromText(text);
+      setStatus(files.length > 1 ? `Chip is reading your ${files.length} files…` : 'Chip is reading your sheet…');
+      fill(await readSheet({ text: text ? text.slice(0, 60000) : undefined, files: scans }), '');
     } catch (e) {
       setStep('start');
       toast((e as Error).message || 'Couldn’t open that file.', 'warn');
@@ -131,19 +155,8 @@ export function NewAssignment({ open, onClose, count, start = 'choose' }: { open
         },
         kind === 'topic' ? [] : form.tasks.filter((t) => t.keep && t.title.trim()).map((t) => ({ title: t.title.trim(), due: t.due || null })),
       );
-      // A reading or notes to learn from: their text, taken out here, for Chip to read with them.
-      if (kind === 'topic' && reading) {
-        try {
-          const { extractText } = await import('../lib/extract.ts');
-          const { text } = await extractText(reading);
-          if (text.trim().length >= 20) {
-            const max = me?.readings.max_chars ?? 60000;
-            await addSource(a.id, { kind: 'other', data: { title: reading.name.replace(/\.[^.]+$/, '') }, content: text.slice(0, max), file_name: reading.name });
-          } else toast('That file had no text to read (is it a scan?). Add your notes another way.', 'warn');
-        } catch (e) {
-          toast((e as Error).message || 'Couldn’t read that file.', 'warn');
-        }
-      }
+      // Readings or notes to learn from: their text, taken out here, for Chip to read with them.
+      if (kind === 'topic' && readings.length) await addReadings(a.id, readings, me?.readings.max_chars ?? 60000);
       close();
       navigate(`/app/a/${a.id}`);
     } catch (e) {
@@ -226,18 +239,25 @@ export function NewAssignment({ open, onClose, count, start = 'choose' }: { open
             <textarea id="t-goal" className="field min-h-24 resize-y" value={form.brief} onChange={(e) => set('brief', e.target.value)} placeholder="e.g. Explain SN1 and SN2, predict products, and draw the mechanisms for my exam." />
           </div>
           <div className="sm:col-span-2">
-            <span className="label">Notes or a reading to learn from <span className="font-normal text-ink-4">(optional)</span></span>
+            <span className="label">Notes or readings to learn from <span className="font-normal text-ink-4">(optional)</span></span>
             <button type="button" className="flex w-full items-center gap-3 rounded-2xl border-2 border-dashed border-line-2 bg-paper/60 px-4 py-3 text-left text-sm text-ink-2 hover:border-iris/50" onClick={() => readingInput.current?.click()}>
               <BookOpen size={18} className="text-iris" />
-              <span className="min-w-0 flex-1 truncate">{reading ? reading.name : 'Add a PDF or Word file: Chip will read it with you'}</span>
+              <span className="min-w-0 flex-1 truncate">
+                {readings.length === 0
+                  ? 'Add PDFs or Word files: Chip will read them with you'
+                  : readings.length === 1
+                    ? readings[0].name
+                    : `${readings.length} files: ${readings.map((f) => f.name).join(', ')}`}
+              </span>
             </button>
             <input
               ref={readingInput}
               type="file"
               className="hidden"
               accept=".pdf,.docx,.txt,.md,application/pdf"
+              multiple
               onChange={(e) => {
-                setReading(e.target.files?.[0] ?? null);
+                setReadings(Array.from(e.target.files ?? []));
                 e.target.value = '';
               }}
             />
@@ -259,25 +279,26 @@ export function NewAssignment({ open, onClose, count, start = 'choose' }: { open
             onDrop={(e) => {
               e.preventDefault();
               setDragging(false);
-              const file = e.dataTransfer.files[0];
-              if (file) void fromFile(file);
+              const files = Array.from(e.dataTransfer.files);
+              if (files.length) void fromFiles(files);
             }}
           >
             <span className="grid h-12 w-12 place-items-center rounded-2xl bg-white text-iris shadow-[var(--shadow-soft)]">
               <Upload size={22} />
             </span>
             <span className="mt-3 font-semibold">Drop your assignment sheet</span>
-            <span className="mt-1 text-sm text-ink-3">PDF, Word, text, or a photo of it</span>
+            <span className="mt-1 text-sm text-ink-3">PDF, Word, text, or photos of it: several at once if it comes in parts</span>
           </button>
           <input
             ref={fileInput}
             type="file"
             className="hidden"
             accept=".pdf,.docx,.txt,.md,image/png,image/jpeg,image/webp,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain"
+            multiple
             onChange={(e) => {
-              const file = e.target.files?.[0];
+              const files = Array.from(e.target.files ?? []);
               e.target.value = '';
-              if (file) void fromFile(file);
+              if (files.length) void fromFiles(files);
             }}
           />
           <label className="label mt-6" htmlFor="paste">

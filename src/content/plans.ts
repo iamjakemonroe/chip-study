@@ -11,6 +11,6 @@ export const PRO_FEATURES = [
   'Chip’s best model (Claude Opus) for deep tutoring and feedback: about 100 in-depth messages a month',
   'About 40 quick messages a day on top, with Chip Fast',
   'Web research: real sources, with links',
-  'Bigger files (20 MB) and 30 readings a day',
+  'Bigger files (20 MB), up to 10 at a time, and 30 readings a day',
   'Everything in Free',
 ];

@@ -92,8 +92,14 @@ export interface Setup {
   tasks: { title: string; due: string }[];
 }
 
-/** Chip reads an assignment sheet: its text, or the file itself (a scan or a photo). */
-export async function readSheet(input: { text?: string; file?: { media_type: string; data: string } }): Promise<Setup> {
+type SheetFile = { media_type: string; data: string };
+
+/** Chip reads an assignment sheet: its text, and the files themselves where they're scans or
+ * photos (several at once: the pages of a printed sheet, a brief and its rubric). */
+export async function readSheet(sheet: { text?: string; files?: SheetFile[] }): Promise<Setup> {
+  // One file goes as `file`, which every version of the function reads.
+  const { files, ...rest } = sheet;
+  const input = files?.length === 1 ? { ...rest, file: files[0] } : sheet;
   const res = await fetch(`${SUPABASE_URL}/functions/v1/chip-study`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${await token()}`, apikey: SUPABASE_KEY, 'Content-Type': 'application/json' },

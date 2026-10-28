@@ -4,6 +4,7 @@ import { Modal, Segmented, Spinner } from '../../components/ui.tsx';
 import { addSource, deleteSource, updateAssignment, updateSource } from '../../lib/api.ts';
 import { html, inText, KIND_NAMES, reference, referenceList } from '../../lib/citations.ts';
 import type { Source, SourceData, SourceKind, Style } from '../../lib/types.ts';
+import { addReadings } from '../../lib/readings.ts';
 import { useAuth } from '../../store/auth.ts';
 import { toast } from '../../store/toast.ts';
 import { citedSources } from '../extensions.ts';
@@ -30,22 +31,12 @@ export function SourcesPanel({ onFind }: { onFind: () => void }) {
     }
   };
 
-  const addReading = async (file: File) => {
+  const addFiles = async (files: File[]) => {
     setReading(true);
     try {
-      const { extractText, kindOf } = await import('../../lib/extract.ts');
-      if (!['pdf', 'docx', 'text'].includes(kindOf(file))) throw new Error('A reading can be a PDF, a Word file or text.');
-      const { text } = await extractText(file);
-      if (text.trim().length < 20) throw new Error('No text in that file (is it a scan?). Paste its text into a note instead.');
-      const max = me?.readings.max_chars ?? 60000;
-      const content = text.slice(0, max);
-      const title = file.name.replace(/\.[^.]+$/, '').replace(/[_-]+/g, ' ').trim();
-      const s = await addSource(assignment.id, { kind: 'other', data: { title }, content, file_name: file.name });
-      useWorkspace.setState({ sources: [...useWorkspace.getState().sources, s] });
-      toast(text.length > max ? `Added. It was long, so Chip reads the first ${max.toLocaleString()} characters.` : 'Reading added. Chip can read it with you now.', 'good');
-      setEditing(s);
-    } catch (e) {
-      toast((e as Error).message, 'warn');
+      const added = await addReadings(assignment.id, files, me?.readings.max_chars ?? 60000);
+      if (added.length) useWorkspace.setState({ sources: [...useWorkspace.getState().sources, ...added] });
+      if (added.length === 1) setEditing(added[0]);
     } finally {
       setReading(false);
     }
@@ -70,7 +61,7 @@ export function SourcesPanel({ onFind }: { onFind: () => void }) {
           <button className="btn btn-ghost btn-sm" onClick={() => setEditing('new')}>
             <Plus size={15} /> Source
           </button>
-          <button className="btn btn-ghost btn-sm" onClick={() => fileInput.current?.click()} disabled={reading} title="Add a reading (PDF or Word) for Chip to read with you">
+          <button className="btn btn-ghost btn-sm" onClick={() => fileInput.current?.click()} disabled={reading} title="Add readings (PDF or Word, several at once) for Chip to read with you">
             {reading ? <Spinner /> : <FileUp size={15} />} Reading
           </button>
           <input
@@ -78,10 +69,11 @@ export function SourcesPanel({ onFind }: { onFind: () => void }) {
             type="file"
             className="hidden"
             accept=".pdf,.docx,.txt,.md,application/pdf"
+            multiple
             onChange={(e) => {
-              const f = e.target.files?.[0];
+              const files = Array.from(e.target.files ?? []);
               e.target.value = '';
-              if (f) void addReading(f);
+              if (files.length) void addFiles(files);
             }}
           />
         </div>
