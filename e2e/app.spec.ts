@@ -184,6 +184,37 @@ test('several readings at once, to learn from', async ({ page }) => {
   expect(m.db.study_sources.map((s) => s.file_name).sort()).toEqual(['chapter-1.txt', 'chapter-2.txt']);
 });
 
+test('files in the chat: a document becomes a reading, a photo goes to Chip with the message', async ({ page }) => {
+  const m = new MockBackend({ tier: 'pro' });
+  m.seedAssignment();
+  await m.install(page);
+  await page.goto('/app');
+  await openSpace(page, /Coastal erosion essay/);
+  await openPanel(page, 'Chip');
+  await page.getByRole('button', { name: 'Attach files' }).click();
+  await page.locator('input[type="file"][multiple]').last().setInputFiles([
+    { name: 'lecture-notes.txt', mimeType: 'text/plain', buffer: Buffer.from('Managed retreat moves homes back from the coast; sea walls shift erosion further along it.') },
+    { name: 'whiteboard.png', mimeType: 'image/png', buffer: PNG },
+  ]);
+  const attached = page.getByRole('list', { name: 'Attached files' });
+  await expect(attached.getByText('lecture-notes.txt')).toBeVisible();
+  await expect(attached.getByText('whiteboard.png')).toBeVisible();
+  await page.getByRole('button', { name: 'Remove whiteboard.png' }).click();
+  await expect(attached.getByText('whiteboard.png')).toHaveCount(0);
+  await page.getByRole('button', { name: 'Attach files' }).click();
+  await page.locator('input[type="file"][multiple]').last().setInputFiles([{ name: 'whiteboard.png', mimeType: 'image/png', buffer: PNG }]);
+  // Nothing typed: the files alone are enough to send.
+  await page.getByRole('button', { name: 'Send' }).click();
+  await expect(page.getByText('Read these with me: lecture-notes.txt, whiteboard.png.')).toBeVisible();
+  await expect.poll(() => m.db.study_sources.map((s) => s.file_name)).toEqual(['lecture-notes.txt']);
+  const asked = m.made('/functions/v1/chip-study', 'POST').map((r) => r.body as { action: string; attached?: string[]; files?: { name: string }[] });
+  const last = asked.at(-1)!;
+  expect(last).toMatchObject({ action: 'chat', attached: ['lecture-notes.txt'] });
+  expect(last.files?.map((f) => f.name)).toEqual(['whiteboard.png']);
+  await expect(page.getByRole('list', { name: 'Attached files' })).toHaveCount(0);
+  await nothingClipped(page);
+});
+
 test('writing saves as you go, and is there after a reload', async ({ page }) => {
   const m = new MockBackend();
   m.seedAssignment();

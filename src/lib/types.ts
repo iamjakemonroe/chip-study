@@ -116,7 +116,7 @@ export interface Message {
   role: 'user' | 'chip';
   mode: Mode;
   content: string;
-  meta: { selection?: string; model?: string; kind?: ModelKind; stopped?: boolean; cut?: boolean; searches?: number };
+  meta: { selection?: string; files?: string[]; model?: string; kind?: ModelKind; stopped?: boolean; cut?: boolean; searches?: number };
   created_at: string;
 }
 

@@ -24,6 +24,10 @@ export interface ChatRequest {
   model: ModelKind;
   /** Ask the last question again (a new answer instead of the last one). */
   again?: boolean;
+  /** Scans and photos for Chip to read with this message. */
+  files?: { name: string; media_type: string; data: string }[];
+  /** Documents attached to this message, saved as readings first (Chip has them in its materials). */
+  attached?: string[];
 }
 
 /** Chip said no before starting: why ('limit', 'busy', 'size', 'uploads', 'account'), and when
