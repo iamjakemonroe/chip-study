@@ -1,6 +1,6 @@
 import { motion, useReducedMotion } from 'framer-motion';
 import { Archive, ArrowRight, CheckCircle2, Circle, Clock, Flame, GraduationCap, Layers, MoreHorizontal, Pause, Play, Plus, Sparkles, Trash2, Undo2 } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router';
 import { NewAssignment } from '../components/NewAssignment.tsx';
 import { Orb } from '../components/Orb.tsx';
@@ -32,6 +32,17 @@ export function Dashboard() {
   const [creating, setCreating] = useState(false);
   const [removing, setRemoving] = useState<Assignment | null>(null);
   const [failed, setFailed] = useState(false);
+
+  // The floating New button (phones) shows only once the page's own has scrolled away above.
+  const newRef = useRef<HTMLButtonElement>(null);
+  const [floatNew, setFloatNew] = useState(false);
+  useEffect(() => {
+    const el = newRef.current;
+    if (!el) return;
+    const seen = new IntersectionObserver(([e]) => setFloatNew(!e.isIntersecting && e.boundingClientRect.top < 0));
+    seen.observe(el);
+    return () => seen.disconnect();
+  }, []);
 
   const load = useCallback(async () => {
     try {
@@ -183,7 +194,7 @@ export function Dashboard() {
                   </button>
                 ))}
               </div>
-              <button className="btn btn-primary btn-sm" onClick={() => setCreating(true)}>
+              <button ref={newRef} className="btn btn-primary btn-sm" onClick={() => setCreating(true)}>
                 <Plus size={16} /> New
               </button>
             </div>
@@ -325,9 +336,14 @@ export function Dashboard() {
           }
         }}
       />
+      {/* On a phone, once the page's own New button has scrolled away: never over the cards at the top. */}
       <button
-        className="btn btn-iris fixed bottom-5 right-5 z-30 h-14 w-14 rounded-full p-0 sm:hidden"
+        className={`btn btn-iris fixed bottom-5 right-5 z-30 h-14 w-14 rounded-full p-0 transition-[opacity,transform] duration-300 sm:hidden ${
+          floatNew ? 'opacity-100' : 'pointer-events-none scale-75 opacity-0'
+        }`}
         aria-label="New assignment"
+        aria-hidden={!floatNew}
+        tabIndex={floatNew ? 0 : -1}
         onClick={() => setCreating(true)}
         style={{ marginBottom: 'env(safe-area-inset-bottom)' }}
       >
@@ -388,7 +404,9 @@ function FocusCard({ sessions }: { sessions: FocusSession[] }) {
     <div className="card flex h-full flex-col p-5">
       <div className="flex items-center justify-between">
         <h2 className="text-sm font-semibold text-ink-2">Focus today</h2>
-        <span className="text-xs font-medium text-ink-3">{PLANS.find((p) => p.plan.focus === plan.focus)?.name ?? ''}</span>
+        <span className="text-xs font-medium text-ink-3" title={PLANS.find((p) => p.plan.focus === plan.focus)?.name}>
+          {plan.focus}-min sessions
+        </span>
       </div>
       <p className="mt-2 text-3xl font-semibold tracking-[-0.02em] tabular-nums">{minutesLabel(today)}</p>
       <div className="mt-3 flex h-14 items-end gap-1.5" aria-label="Focus time over the last seven days">

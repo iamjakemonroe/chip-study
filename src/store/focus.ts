@@ -16,9 +16,9 @@ export interface Plan {
 }
 
 export const PLANS: { name: string; plan: Plan }[] = [
-  { name: '25 / 5', plan: { focus: 25, short: 5, long: 15, every: 4 } },
-  { name: '50 / 10', plan: { focus: 50, short: 10, long: 20, every: 3 } },
-  { name: '90 / 20', plan: { focus: 90, short: 20, long: 30, every: 2 } },
+  { name: '25 min focus, 5 min break', plan: { focus: 25, short: 5, long: 15, every: 4 } },
+  { name: '50 min focus, 10 min break', plan: { focus: 50, short: 10, long: 20, every: 3 } },
+  { name: '90 min focus, 20 min break', plan: { focus: 90, short: 20, long: 30, every: 2 } },
 ];
 
 interface FocusState {
