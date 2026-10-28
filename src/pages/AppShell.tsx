@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { Navigate, Outlet, useLocation } from 'react-router';
-import { Orb } from '../components/Orb.tsx';
+import { ChipLoader } from '../components/ChipLoader.tsx';
 import { useAuth } from '../store/auth.ts';
 import { useFocus } from '../store/focus.ts';
 
@@ -11,14 +11,7 @@ export function AppShell() {
   const session = useAuth((s) => s.session);
   const where = useLocation();
 
-  if (!ready) {
-    return (
-      <div className="grid min-h-dvh place-items-center">
-        <div className="daylight" />
-        <Orb size={44} state="thinking" />
-      </div>
-    );
-  }
+  if (!ready) return <ChipLoader />;
   if (!session) return <Navigate to={`/signin?next=${encodeURIComponent(where.pathname + where.search)}`} replace />;
   return (
     <>

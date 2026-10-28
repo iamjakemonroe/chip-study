@@ -1,11 +1,17 @@
 import { createBrowserRouter } from 'react-router';
 import { RouterProvider } from 'react-router/dom';
+import { ChipLoader } from './components/ChipLoader.tsx';
 import { Toasts } from './components/ui.tsx';
 import { startAuth } from './store/auth.ts';
 
 startAuth();
 
+// The screens load as they're needed: until the first one has, Chip's loader (the same as
+// index.html's) stays up rather than a blank page.
 const router = createBrowserRouter([
+  {
+    HydrateFallback: ChipLoader,
+    children: [
   { path: '/', lazy: () => import('./landing/Landing.tsx').then((m) => ({ Component: m.Landing })) },
   { path: '/signin', lazy: () => import('./pages/SignIn.tsx').then((m) => ({ Component: m.SignIn })) },
   { path: '/terms', lazy: () => import('./pages/Legal.tsx').then((m) => ({ Component: m.Terms })) },
@@ -22,6 +28,8 @@ const router = createBrowserRouter([
     ],
   },
   { path: '*', lazy: () => import('./pages/NotFound.tsx').then((m) => ({ Component: m.NotFound })) },
+    ],
+  },
 ]);
 
 export function App() {

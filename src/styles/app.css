@@ -371,6 +371,92 @@
   95% { transform: scaleY(0.1); }
 }
 
+/* ── Chip, while something loads ───────────────────────────────────────
+   The logo comes alive: Chip breathes and looks about, a comet of light circles him, and a calm
+   line says what's happening. index.html draws the same before the app has started. */
+.orb-alive {
+  animation: alive 3.2s var(--ease-calm) infinite;
+  box-shadow: inset -3px -4px 10px rgb(40 30 140 / 0.25), 0 8px 26px rgb(100 87 240 / 0.38);
+}
+.orb-alive .orb-sheen {
+  opacity: 0.75;
+  animation: spin-slow 5s linear infinite;
+}
+.orb-alive .orb-face {
+  animation: look 6s var(--ease-calm) infinite;
+}
+@keyframes alive {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.045); }
+}
+@keyframes look {
+  0%, 16%, 100% { transform: translate(-50%, -50%); }
+  26%, 40% { transform: translate(-63%, -53%); }
+  52%, 66% { transform: translate(-37%, -53%); }
+  78%, 88% { transform: translate(-50%, -44%); }
+}
+.chip-loader {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  gap: calc(var(--s) * 0.5);
+}
+.chip-loader-glow,
+.chip-loader-orbit {
+  position: absolute;
+  left: 50%;
+  border-radius: 50%;
+  pointer-events: none;
+}
+.chip-loader-glow {
+  top: calc(var(--s) * -0.55);
+  width: calc(var(--s) * 2.1);
+  height: calc(var(--s) * 2.1);
+  margin-left: calc(var(--s) * -1.05);
+  background: radial-gradient(circle, rgb(139 125 255 / 0.3) 0%, rgb(79 180 240 / 0.12) 42%, transparent 68%);
+  animation: loader-glow 3.2s var(--ease-calm) infinite;
+}
+.chip-loader-orbit {
+  top: calc(var(--s) * -0.22);
+  width: calc(var(--s) * 1.44);
+  height: calc(var(--s) * 1.44);
+  margin-left: calc(var(--s) * -0.72);
+  background: conic-gradient(from 0deg, transparent 0 58%, rgb(139 125 255 / 0.05) 62%, rgb(139 125 255 / 0.7) 90%, #fff 97%, transparent 100%);
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 2.5px));
+  mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 2.5px));
+  animation: spin-slow 1.8s linear infinite;
+}
+.chip-loader-label {
+  font-size: 0.95rem;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  color: var(--color-ink-3);
+}
+.chip-loader-dots i {
+  display: inline-block;
+  width: 4px;
+  height: 4px;
+  margin-left: 3px;
+  border-radius: 50%;
+  background: currentColor;
+  vertical-align: middle;
+  animation: loader-dot 1.4s var(--ease-calm) infinite;
+}
+.chip-loader-dots i:nth-child(2) { animation-delay: 0.2s; }
+.chip-loader-dots i:nth-child(3) { animation-delay: 0.4s; }
+@keyframes loader-glow {
+  0%, 100% { opacity: 0.65; transform: scale(0.94); }
+  50% { opacity: 1; transform: scale(1.04); }
+}
+@keyframes loader-dot {
+  0%, 100% { opacity: 0.2; }
+  40% { opacity: 0.9; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .chip-loader-orbit { opacity: 0.45; }
+  .chip-loader-dots i { opacity: 0.6; }
+}
+
 /* ── Sign in ────────────────────────────────────────────────────────── */
 .signin-art {
   background: linear-gradient(160deg, #f3f0ff 0%, #eaf6ff 55%, #eafaf4 100%);

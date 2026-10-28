@@ -25,7 +25,8 @@ import { lazy, Suspense, useCallback, useEffect, useState, type ReactNode } from
 import { Link, useParams } from 'react-router';
 import { Orb } from '../components/Orb.tsx';
 import { FocusPill } from '../components/TopBar.tsx';
-import { Confirm, Menu, MenuItem, Modal, Spinner } from '../components/ui.tsx';
+import { ChipLoader } from '../components/ChipLoader.tsx';
+import { Confirm, Menu, MenuItem, Modal } from '../components/ui.tsx';
 import { createDocument, deleteDocument, getAssignment, listDocuments, listLog, listMessages, listNotes, listSources, listTasks, listThreads, renameDocument } from '../lib/api.ts';
 import { TONE_STYLES } from '../lib/colors.ts';
 import { dueLabel } from '../lib/dates.ts';
@@ -132,28 +133,25 @@ export function Workspace() {
     if (wide) usePrefs.getState().set({ chipOpen: p !== null });
   };
 
+  if (status === 'loading' || (status === 'ready' && !assignment)) return <ChipLoader label="Opening your work" />;
   if (status !== 'ready' || !assignment) {
     return (
       <div className="grid min-h-dvh place-items-center px-6 text-center">
-        {status === 'loading' ? (
-          <Orb size={44} state="thinking" />
-        ) : (
-          <div>
-            <Orb size={56} className="mx-auto" />
-            <p className="mt-5 text-lg font-semibold">{status === 'missing' ? 'This assignment isn’t here' : 'Couldn’t open this assignment'}</p>
-            <p className="mt-1 text-ink-3">{status === 'missing' ? 'It may have been deleted.' : 'Check your connection and try again.'}</p>
-            <div className="mt-6 flex justify-center gap-2">
-              <Link to="/app" className="btn btn-ghost">
-                Back to my desk
-              </Link>
-              {status === 'failed' && (
-                <button className="btn btn-primary" onClick={() => void load()}>
-                  Try again
-                </button>
-              )}
-            </div>
+        <div>
+          <Orb size={56} className="mx-auto" />
+          <p className="mt-5 text-lg font-semibold">{status === 'missing' ? 'This assignment isn’t here' : 'Couldn’t open this assignment'}</p>
+          <p className="mt-1 text-ink-3">{status === 'missing' ? 'It may have been deleted.' : 'Check your connection and try again.'}</p>
+          <div className="mt-6 flex justify-center gap-2">
+            <Link to="/app" className="btn btn-ghost">
+              Back to my desk
+            </Link>
+            {status === 'failed' && (
+              <button className="btn btn-primary" onClick={() => void load()}>
+                Try again
+              </button>
+            )}
           </div>
-        )}
+        </div>
       </div>
     );
   }
@@ -188,11 +186,7 @@ export function Workspace() {
               />
             ) : (
               <Suspense
-                fallback={
-                  <div className="grid h-full place-items-center">
-                    <Spinner size={20} />
-                  </div>
-                }
+                fallback={<ChipLoader page={false} size={44} label="" />}
               >
                 {doc.kind === 'code' ? <CodeDoc key={doc.id} doc={doc} onAskChip={(text) => ask('explain', text, useWorkspace.getState().selection || undefined)} /> : <SheetDoc key={doc.id} doc={doc} />}
               </Suspense>
