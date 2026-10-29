@@ -5,18 +5,21 @@ import type { Me, Source } from './types.ts';
 type Text = { file: File; text: string };
 
 /** Adds [files] as readings on an assignment or topic, one after another: the text taken out of
- * each PDF, Word or text file, for Chip to read with the student (a long one cut to [maxChars]).
+ * each document (PDF, Word, Excel, PowerPoint and the rest extract.ts reads), for Chip to read
+ * with the student (a long one cut to [maxChars]).
  * Says how it went; one without text is left out, and once the day's readings are used up the
  * rest are too. */
 export async function addReadings(assignmentId: string, files: File[], maxChars: number): Promise<Source[]> {
-  const { extractText, kindOf } = await import('./extract.ts');
+  const { extractText, kindOf, hasText, cantRead } = await import('./extract.ts');
   const texts: Text[] = [];
   let missed: string | null = null;
   for (const file of files) {
     try {
-      if (!['pdf', 'docx', 'text'].includes(kindOf(file))) throw new Error(`${file.name} isn’t a PDF, a Word file or text.`);
+      const kind = kindOf(file);
+      if (kind === 'image') throw new Error(`${file.name} is a photo: attach it in the chat for Chip to read.`);
+      if (!hasText(kind)) throw new Error(cantRead(file));
       const { text } = await extractText(file);
-      if (text.trim().length < 20) throw new Error(`No text in ${file.name} (is it a scan?). Paste its text into a note instead.`);
+      if (text.trim().length < 20) throw new Error(kind === 'pdf' ? `No text in ${file.name} (is it a scan?). Attach it in the chat for Chip to read, or paste its text into a note.` : `No text in ${file.name}.`);
       texts.push({ file, text });
     } catch (e) {
       missed ??= (e as Error).message || `Couldn’t read ${file.name}.`;
@@ -62,14 +65,14 @@ export type ChatFile = { name: string; media_type: string; data: string };
 export async function prepareAttachments(assignmentId: string, files: File[], me: Me | null): Promise<{ files: ChatFile[]; attached: string[]; saved: Source[] }> {
   const most = me?.tier === 'pro' ? 10 : 3;
   if (files.length > most) throw new Error(`Chip reads up to ${most} files at once${me?.tier === 'pro' ? '' : ' (10 with Pro)'}.`);
-  const { extractText, base64Of, mediaType, kindOf } = await import('./extract.ts');
+  const { extractText, base64Of, mediaType, kindOf, hasText, cantRead } = await import('./extract.ts');
   const max = (me?.uploads.max_mb ?? 4) * 1024 * 1024;
   const texts: Text[] = [];
   const scans: ChatFile[] = [];
   let bytes = 0;
   for (const file of files) {
     const kind = kindOf(file);
-    if (kind === 'other') throw new Error(`${file.name}: Chip reads PDFs, Word files (.docx), text and photos.`);
+    if (kind !== 'image' && !hasText(kind)) throw new Error(cantRead(file));
     if (kind !== 'image') {
       const { text } = await extractText(file);
       if (text.trim().length >= 40) {

@@ -37,6 +37,10 @@ const DEFAULTS: Record<Table, () => Record<string, unknown>> = {
 
 export interface MockOptions {
   tier?: 'free' | 'pro';
+  /** Which Pro, with Pro: full Pro (the default) or the student plan. */
+  plan?: 'pro' | 'student';
+  /** The account's email is a school's, which gets the student price. */
+  student?: boolean;
   /** Whether Pro can be bought (live Flutterwave keys). */
   payOn?: boolean;
   /** Chip has no time left today. */
@@ -208,17 +212,21 @@ export class MockBackend {
 
   me() {
     const pro = this.opts.tier === 'pro';
+    const onStudent = pro && this.opts.plan === 'student';
     const out = this.opts.chipOut;
     return {
       tier: pro ? 'pro' : 'free',
+      plan: pro ? (onStudent ? 'student' : 'pro') : null,
       name: this.opts.name ?? 'Ada Lovelace',
       pro_until: pro ? new Date(Date.now() + 20 * 86_400_000).toISOString() : null,
       resets_at: new Date(Date.now() + 6 * 3_600_000).toISOString(),
-      fast: { used: out ? 0.03 : this.fastUsed, cap: pro ? 0.05 : 0.03, avg: 0.0012 },
-      best: pro ? { used: this.bestUsed, cap: 0.4, avg: 0.03, period_used: 1.1, period_cap: 3 } : null,
+      fast: { used: out ? 0.03 : this.fastUsed, cap: pro ? 0.06 : 0.03, avg: 0.0012 },
+      best: pro ? { used: this.bestUsed, cap: onStudent ? 0.45 : 0.6, avg: 0.03, period_used: 1.1, period_cap: onStudent ? 3.3 : 4.5 } : null,
       uploads: { used: 0, cap: pro ? 25 : 3, max_mb: pro ? 20 : 4 },
       readings: { used: 0, cap: pro ? 30 : 3, max_chars: pro ? 400000 : 60000 },
-      price: { amount: 4.99, currency: 'USD' },
+      price: { amount: 7.99, currency: 'USD' },
+      student: { eligible: !!this.opts.student, domain: this.opts.student ? 'strath.ac.uk' : 'gmail.com' },
+      student_price: { amount: 5.99, currency: 'USD' },
     };
   }
 
@@ -261,7 +269,11 @@ export class MockBackend {
 
   private pay(route: Route, body: Record<string, unknown>) {
     if (body?.action === 'status') return this.json(route, { on: !!this.opts.payOn, test: false });
-    if (body?.action === 'subscribe') return this.opts.payOn ? this.json(route, { link: 'https://checkout.flutterwave.test/pay/abc', ref: 'kaivon-sub-1' }) : this.json(route, { error: 'off' }, 503);
+    if (body?.action === 'subscribe') {
+      if (!this.opts.payOn) return this.json(route, { error: 'off' }, 503);
+      if (body.plan === 'study.pro.student.monthly' && !this.opts.student) return this.json(route, { error: 'school' }, 400);
+      return this.json(route, { link: 'https://checkout.flutterwave.test/pay/abc', ref: 'kaivon-sub-1' });
+    }
     if (body?.action === 'confirm') {
       this.opts.tier = 'pro';
       return this.json(route, { status: 'paid', product: 'study_pro', until: new Date(Date.now() + 30 * 86_400_000).toISOString() });

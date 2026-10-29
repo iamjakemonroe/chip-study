@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Logo } from '../components/Logo.tsx';
 import { Orb } from '../components/Orb.tsx';
-import { FREE_FEATURES, PRO_FEATURES } from '../content/plans.ts';
+import { FREE_FEATURES, PRO_FEATURES, SCHOOL_EMAILS } from '../content/plans.ts';
 import { proLive, site } from '../content/site.ts';
 import '../styles/landing.css';
 import { HeroLight } from './HeroLight.tsx';
@@ -580,6 +580,22 @@ function Pricing() {
               </a>
             }
           />
+          <div className="l-student r-up md:col-span-2">
+            <span className="grid h-11 w-11 flex-none place-items-center rounded-full bg-mint-soft text-xl" aria-hidden="true">
+              🎓
+            </span>
+            <div className="flex-1">
+              <p className="text-lg font-semibold">
+                Students: Pro for ${site.studentPrice.toFixed(2)} a month <span className="chip-tag ml-1 align-middle bg-mint-soft text-mint">{Math.round((1 - site.studentPrice / site.price) * 100)}% off</span>
+              </p>
+              <p className="mt-1 text-[0.9375rem] leading-relaxed text-ink-2">
+                Sign up with your school email ({SCHOOL_EMAILS}) and the student price is yours. Everything in Pro, with about 110 in-depth messages a month from Chip’s best model.
+              </p>
+            </div>
+            <a href="/signin" className="btn btn-ghost w-full flex-none sm:w-auto">
+              Sign up with your school email
+            </a>
+          </div>
         </div>
         <p className="mt-6 text-center text-sm text-ink-3">Prices in US dollars; your bank converts if your card is in another currency.</p>
       </div>
@@ -619,6 +635,7 @@ const FAQ = [
   ['Which AI is Chip?', 'Chip runs on Claude, made by Anthropic. Free uses Chip Fast (Claude Haiku), and Pro adds Chip’s best model (Claude Opus) and web research. Anthropic doesn’t use your work to train its models.'],
   ['Can I use my Utopia account?', 'Yes. Chip Study uses your Kaivon account, the same one you play Utopia with. Sign in with your email and the code we send. New here? We’ll make you an account.'],
   ['Is my work private?', 'Your notes, documents, cards and chats are yours alone. We don’t sell your data or show ads. You can delete anything, or all your study data, at any time.'],
+  ['Is there a student discount?', `Yes. Students get Pro for $${site.studentPrice.toFixed(2)} a month instead of $${site.price.toFixed(2)}. Sign up with your school email (${SCHOOL_EMAILS}) and the Plan page shows the student price. It’s everything in Pro, with a little less of Chip’s best model: about 110 in-depth messages a month instead of 150.`],
   ['What happens when I run out of Chip time?', 'Everything else keeps working: your notes, editor, review deck, timer and record. Chip’s time comes back the next day. Pro gives you much more, and Chip’s best model.'],
   ['Does it work on my phone and iPad?', 'Yes. Chip Study is made for phones, tablets and laptops alike, and you can install it like an app from your browser.'],
 ];

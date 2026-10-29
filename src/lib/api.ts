@@ -304,9 +304,11 @@ export async function payStatus(): Promise<{ on: boolean; test: boolean }> {
   }
 }
 
-export async function subscribePro(): Promise<string> {
+/** Starts paying for Pro, or for the student plan (Pro at the student price, for a school email),
+ * and answers the checkout link. */
+export async function subscribePro(plan: 'pro' | 'student' = 'pro'): Promise<string> {
   const { data, error } = await supabase.functions.invoke('web-pay', {
-    body: { action: 'subscribe', plan: 'study.pro.monthly', currency: 'USD', app: 'study' },
+    body: { action: 'subscribe', plan: plan === 'student' ? 'study.pro.student.monthly' : 'study.pro.monthly', currency: 'USD', app: 'study' },
   });
   const link = (data as { link?: string } | null)?.link;
   if (error || !link || !link.startsWith('https://')) {
@@ -317,7 +319,15 @@ export async function subscribePro(): Promise<string> {
       // No reason given.
     }
     throw new ApiError(
-      why === 'member' ? 'You’re already on Pro.' : why === 'off' ? 'Pro isn’t open yet.' : why === 'account' ? 'Save your account first.' : 'Couldn’t start the payment. Try again.',
+      why === 'member'
+        ? 'You’re already on Pro.'
+        : why === 'off'
+          ? 'Pro isn’t open yet.'
+          : why === 'account'
+            ? 'Save your account first.'
+            : why === 'school'
+              ? 'The student price is for an account made with a school email.'
+              : 'Couldn’t start the payment. Try again.',
     );
   }
   return link;

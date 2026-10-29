@@ -7,7 +7,9 @@ export const site = {
   kaivon: 'https://kaivon.app',
   utopia: 'https://utopia.kaivon.app',
   year: 2026,
-  price: 4.99,
+  /** Pro a month, in US dollars, and the student plan: Pro at 25% off for a school email. */
+  price: 7.99,
+  studentPrice: 5.99,
 } as const;
 
 /** Whether Pro can be bought yet (live Flutterwave keys). The app asks the server; the landing

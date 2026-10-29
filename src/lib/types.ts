@@ -173,6 +173,9 @@ export interface Meter {
 
 export interface Me {
   tier: 'free' | 'pro' | 'guest';
+  /** Which Pro: full Pro, or the student plan (Pro at the student price). Null without Pro.
+   * This and the student fields are missing from a server older than the student plan. */
+  plan?: 'pro' | 'student' | null;
   name: string | null;
   pro_until: string | null;
   resets_at: string;
@@ -181,4 +184,7 @@ export interface Me {
   uploads: { used: number; cap: number; max_mb: number };
   readings: { used: number; cap: number; max_chars: number };
   price: { amount: number; currency: string } | null;
+  /** Whether this account's email is a school's (confirmed), which gets the student price. */
+  student?: { eligible: boolean; domain: string | null };
+  student_price?: { amount: number; currency: string } | null;
 }

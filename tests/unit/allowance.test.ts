@@ -5,6 +5,7 @@ import type { Me } from '../../src/lib/types.ts';
 const now = new Date('2026-10-28T20:00:00Z');
 const base: Me = {
   tier: 'free',
+  plan: null,
   name: 'Ada',
   pro_until: null,
   resets_at: '2026-10-29T00:00:00Z',
@@ -12,11 +13,14 @@ const base: Me = {
   best: null,
   uploads: { used: 0, cap: 3, max_mb: 4 },
   readings: { used: 0, cap: 3, max_chars: 60000 },
-  price: { amount: 4.99, currency: 'USD' },
+  price: { amount: 7.99, currency: 'USD' },
+  student: { eligible: false, domain: 'gmail.com' },
+  student_price: { amount: 5.99, currency: 'USD' },
 };
 const pro: Me = {
   ...base,
   tier: 'pro',
+  plan: 'pro',
   pro_until: '2026-11-20T00:00:00Z',
   fast: { used: 0, cap: 0.05, avg: 0.001 },
   best: { used: 0.1, cap: 0.4, avg: 0.03, period_used: 1, period_cap: 3 },

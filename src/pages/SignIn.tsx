@@ -1,10 +1,12 @@
 import { AnimatePresence, motion } from 'framer-motion';
-import { ArrowLeft, ArrowRight, Check, Mail } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Check, GraduationCap, Mail } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { Navigate, useNavigate, useSearchParams } from 'react-router';
 import { Logo } from '../components/Logo.tsx';
 import { Orb } from '../components/Orb.tsx';
 import { Spinner } from '../components/ui.tsx';
+import { site } from '../content/site.ts';
+import { looksLikeSchoolEmail } from '../lib/school.ts';
 import { sendCode, useAuth, verifyCode } from '../store/auth.ts';
 
 const ease = [0.2, 0.7, 0.1, 1] as const;
@@ -17,6 +19,7 @@ export function SignIn() {
   const navigate = useNavigate();
   const [step, setStep] = useState<'email' | 'code'>('email');
   const [email, setEmail] = useState('');
+  const school = looksLikeSchoolEmail(email);
   const [code, setCode] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -137,6 +140,10 @@ export function SignIn() {
                     autoFocus
                   />
                 </div>
+                <p className={`mt-2 flex items-center gap-1.5 text-sm ${school ? 'font-semibold text-mint' : 'text-ink-3'}`} aria-live="polite">
+                  <GraduationCap size={15} className="flex-none" />
+                  {school ? `A school email: Pro is yours at the student price, $${site.studentPrice.toFixed(2)} a month.` : 'Student? Use your school email and Pro is 25% off.'}
+                </p>
                 {error && (
                   <p className="mt-3 text-sm text-rose" role="alert">
                     {error}

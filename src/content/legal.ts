@@ -11,7 +11,7 @@ export interface LegalDoc {
   sections: { heading: string; body: Block[] }[];
 }
 
-const updated = '28 October 2026';
+const updated = '29 October 2026';
 const contact = site.email;
 
 export const terms: LegalDoc = {
@@ -70,7 +70,8 @@ export const terms: LegalDoc = {
     {
       heading: 'Chip Study Pro, payments and refunds',
       body: [
-        'Chip Study Pro costs US$4.99 a month (Flutterwave converts for cards in other currencies). It renews every month on the card you paid with until you cancel. Payments are processed securely by Flutterwave; we never see your full card details.',
+        'Chip Study Pro costs US$7.99 a month (Flutterwave converts for cards in other currencies). It renews every month on the card you paid with until you cancel. Payments are processed securely by Flutterwave; we never see your full card details.',
+        'Students get Pro for US$5.99 a month on an account made with a school email (such as .edu, .ac.uk or .edu.ng). It includes everything in Pro, with a smaller allowance of Chip’s best model, as the Plan page shows. It’s for current students: we may ask for proof that you study there. If an account on the student plan isn’t a student’s, we may end that plan after telling you; you keep Pro until the end of the month you’ve paid for, and can carry on at the full price.',
         [
           'Cancel any time on the Plan page: nothing more is charged, and you keep Pro until the end of the month you’ve paid for. Part-months aren’t refunded.',
           'Forgot to cancel? Write to us within 7 days of a renewal. If you haven’t used Chip’s best model since it renewed, we refund that renewal.',
@@ -137,13 +138,13 @@ export const privacy: LegalDoc = {
           'Usage: how much Chip time you’ve used each day (numbers only), so the allowances work.',
           'Payments for Pro: what you bought and when, and Flutterwave’s reference. We never see your full card number.',
         ],
-        'When you add a PDF or Word file, its text is taken out on your own device and only the text is kept. If you ask Chip to read a scanned file or a photo, it’s sent to our AI provider for that one reading and not stored.',
+        'When you add a document (a PDF, or a Word, Excel, PowerPoint or other file), its text is taken out on your own device and only the text is kept. Macros in an Excel file are read as text, never run. If you ask Chip to read a scanned file or a photo, it’s sent to our AI provider for that one reading and not stored.',
       ],
     },
     {
       heading: 'How we use it',
       body: [
-        'To run your workspace, to have Chip answer you, to keep your AI-use record, to keep the allowances fair, to take payments and give refunds, to help you when you ask, and to keep the service safe and working. We don’t sell your information, we don’t show ads, and we don’t use your work to train AI models.',
+        'To run your workspace, to have Chip answer you, to keep your AI-use record, to keep the allowances fair, to take payments and give refunds, to offer the student price (we check whether your email’s domain is a school’s), to help you when you ask, and to keep the service safe and working. We don’t sell your information, we don’t show ads, and we don’t use your work to train AI models.',
       ],
     },
     {

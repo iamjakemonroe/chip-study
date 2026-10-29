@@ -32,6 +32,7 @@ import { deleteThread, listLog, listMessages } from '../../lib/api.ts';
 import { plainAnswer, segments } from '../../lib/blocks.ts';
 import { askChip, ChipRefused, type ChipEvent } from '../../lib/chip.ts';
 import { ago } from '../../lib/dates.ts';
+import { ACCEPT_ANY } from '../../lib/filetypes.ts';
 import { renderMarkdown } from '../../lib/markdown.ts';
 import { prepareAttachments, type ChatFile } from '../../lib/readings.ts';
 import type { Mode } from '../../lib/types.ts';
@@ -446,7 +447,7 @@ export function ChipPanel({ onClose }: { onClose?: () => void }) {
             onClick={() => picker.current?.click()}
             disabled={streaming || preparing}
             aria-label="Attach files"
-            title="Attach files for Chip to read with you: PDFs, Word, text or photos"
+            title="Attach files for Chip to read with you: PDFs, Word, Excel, PowerPoint, text, code or photos"
           >
             {preparing ? <Spinner size={15} /> : <Plus size={19} />}
           </button>
@@ -455,7 +456,7 @@ export function ChipPanel({ onClose }: { onClose?: () => void }) {
             type="file"
             className="hidden"
             multiple
-            accept=".pdf,.docx,.txt,.md,image/png,image/jpeg,image/webp,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain"
+            accept={ACCEPT_ANY}
             onChange={(e) => {
               const picked = Array.from(e.target.files ?? []);
               e.target.value = '';

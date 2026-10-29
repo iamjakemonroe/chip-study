@@ -38,7 +38,9 @@ claims study.kaivon.app as the Worker's custom domain).
 
 In dollars of model time, so a short question goes further than a long draft
 (`study_settings` in the migration): free accounts get Chip Fast (Claude Haiku 5.5), $0.03 a day
-(about 20 to 30 messages); Pro ($4.99 a month) gets Chip's best model (Claude Opus 5.5) up to $0.40 a
-day and $3.00 a period (about 100 in-depth messages a month), Fast up to $0.05 a day of its own
-(about 40 messages), and web research. Each call is held before it's made and settled with what it
-cost after. All free accounts together stop at $15 a day.
+(about 20 to 30 messages); Pro ($7.99 a month) gets Chip's best model (Claude Opus 5.5) up to $0.60 a
+day and $4.50 a period (about 150 in-depth messages a month), Fast up to $0.06 a day of its own
+(about 45 messages), and web research. Students with a confirmed school email can take Pro for
+$5.99 a month instead (`study.pro.student.monthly`), with the best model at $0.45 a day and $3.30 a
+period (about 110 messages). Each call is held before it's made and settled with what it cost
+after. All free accounts together stop at $15 a day. The margins are in utopia's docs/PRICING.md.

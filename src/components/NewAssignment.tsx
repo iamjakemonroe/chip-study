@@ -5,6 +5,7 @@ import { createAssignment } from '../lib/api.ts';
 import { ChipRefused, readSheet, type Setup } from '../lib/chip.ts';
 import { COLOR_ORDER, COLORS } from '../lib/colors.ts';
 import { dueAtFrom } from '../lib/dates.ts';
+import { ACCEPT_ANY, ACCEPT_DOCUMENTS } from '../lib/filetypes.ts';
 import { addReadings } from '../lib/readings.ts';
 import type { Color, Style } from '../lib/types.ts';
 import { useAuth } from '../store/auth.ts';
@@ -91,7 +92,7 @@ export function NewAssignment({ open, onClose, count, start = 'choose' }: { open
     }
   };
 
-  /** The sheet from its files: the text taken out of PDFs and Word files, and the scans and
+  /** The sheet from its files: the text taken out of documents (PDF, Word, Excel and the rest), and the scans and
    * photos Chip reads itself, all at once (up to 3 files, or 10 with Pro). */
   const fromFiles = async (picked: File[]) => {
     const most = me?.tier === 'pro' ? 10 : 3;
@@ -99,7 +100,7 @@ export function NewAssignment({ open, onClose, count, start = 'choose' }: { open
     if (picked.length > most) toast(`Chip reads up to ${most} files at once${me?.tier === 'pro' ? '' : ' (10 with Pro)'}: the first ${most} it is.`, 'info');
     setStep('reading');
     try {
-      const { extractText, base64Of, mediaType, kindOf } = await import('../lib/extract.ts');
+      const { extractText, base64Of, mediaType, kindOf, hasText, cantRead } = await import('../lib/extract.ts');
       const max = (me?.uploads.max_mb ?? 4) * 1024 * 1024;
       const texts: string[] = [];
       const scans: { media_type: string; data: string }[] = [];
@@ -107,12 +108,13 @@ export function NewAssignment({ open, onClose, count, start = 'choose' }: { open
       for (const file of files) {
         setStatus(`Opening ${file.name}…`);
         const kind = kindOf(file);
-        if (kind === 'other') throw new Error(`${file.name}: Chip Study reads PDFs, Word files (.docx), text and photos.`);
+        if (kind !== 'image' && !hasText(kind)) throw new Error(cantRead(file));
         const { text } = kind === 'image' ? { text: '' } : await extractText(file);
         if (text.trim().length >= 40) {
           texts.push(files.length > 1 ? `[${file.name}]\n${text.trim()}` : text);
           continue;
         }
+        if (kind !== 'image' && kind !== 'pdf') throw new Error(`No text in ${file.name}.`);
         // A scan or a photo: Chip reads the file itself.
         bytes += file.size;
         if (bytes > max) {
@@ -244,7 +246,7 @@ export function NewAssignment({ open, onClose, count, start = 'choose' }: { open
               <BookOpen size={18} className="text-iris" />
               <span className="min-w-0 flex-1 truncate">
                 {readings.length === 0
-                  ? 'Add PDFs or Word files: Chip will read them with you'
+                  ? 'Add PDFs, Word, Excel or PowerPoint files: Chip will read them with you'
                   : readings.length === 1
                     ? readings[0].name
                     : `${readings.length} files: ${readings.map((f) => f.name).join(', ')}`}
@@ -254,7 +256,7 @@ export function NewAssignment({ open, onClose, count, start = 'choose' }: { open
               ref={readingInput}
               type="file"
               className="hidden"
-              accept=".pdf,.docx,.txt,.md,application/pdf"
+              accept={ACCEPT_DOCUMENTS}
               multiple
               onChange={(e) => {
                 setReadings(Array.from(e.target.files ?? []));
@@ -287,13 +289,13 @@ export function NewAssignment({ open, onClose, count, start = 'choose' }: { open
               <Upload size={22} />
             </span>
             <span className="mt-3 font-semibold">Drop your assignment sheet</span>
-            <span className="mt-1 text-sm text-ink-3">PDF, Word, text, or photos of it: several at once if it comes in parts</span>
+            <span className="mt-1 text-sm text-ink-3">PDF, Word, PowerPoint, text, or photos of it: several at once if it comes in parts</span>
           </button>
           <input
             ref={fileInput}
             type="file"
             className="hidden"
-            accept=".pdf,.docx,.txt,.md,image/png,image/jpeg,image/webp,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain"
+            accept={ACCEPT_ANY}
             multiple
             onChange={(e) => {
               const files = Array.from(e.target.files ?? []);

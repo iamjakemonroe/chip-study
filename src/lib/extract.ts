@@ -1,24 +1,28 @@
-import { docxText } from './zip.ts';
+import { kindOf, type FileKind } from './filetypes.ts';
+import { epubText, htmlText, notebookText, openDocumentText, rtfText, slidesText, workbookText } from './office.ts';
+import { docxText, openZip } from './zip.ts';
 
-/** Text from a file the student adds (an assignment sheet, a reading), taken out on their own
- * device. PDFs are read with pdf.js, Word files with our own small reader; a photo, or a scanned
- * PDF with no text in it, comes back empty for Chip to read instead. */
+export { cantRead, hasText, kindOf, type FileKind } from './filetypes.ts';
 
-export type FileKind = 'pdf' | 'docx' | 'text' | 'image' | 'other';
-
-export function kindOf(file: File): FileKind {
-  const name = file.name.toLowerCase();
-  if (file.type === 'application/pdf' || name.endsWith('.pdf')) return 'pdf';
-  if (name.endsWith('.docx') || file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') return 'docx';
-  if (/^image\/(png|jpe?g|webp|gif)$/.test(file.type) || /\.(png|jpe?g|webp|gif)$/.test(name)) return 'image';
-  if (file.type.startsWith('text/') || /\.(txt|md|markdown|csv|rtf)$/.test(name)) return 'text';
-  return 'other';
-}
+/** Text from a file the student adds (an assignment sheet, a reading, their data or code), taken
+ * out on their own device. PDFs are read with pdf.js; Word, Excel (formulas and an .xlsm's macros
+ * too, never run), PowerPoint, OpenDocument and EPUB files with our own small readers; RTF,
+ * notebooks, web pages, text, data and code as text. A photo, or a scanned PDF with no text in
+ * it, comes back empty for Chip to read instead. */
 
 export async function extractText(file: File): Promise<{ kind: FileKind; text: string; pages?: number }> {
   const kind = kindOf(file);
   if (kind === 'text') return { kind, text: (await file.text()).trim() };
+  if (kind === 'rtf') return { kind, text: rtfText(await file.text()) };
+  if (kind === 'notebook') return { kind, text: notebookText(await file.text()) };
+  if (kind === 'html') return { kind, text: htmlText(await file.text()) };
   if (kind === 'docx') return { kind, text: await docxText(await file.arrayBuffer()) };
+  if (kind === 'sheet' || kind === 'slides' || kind === 'opendoc' || kind === 'epub') {
+    const zip = openZip(await file.arrayBuffer());
+    if (!zip) throw new Error(`${file.name} couldn’t be opened. Is it protected with a password? Save a copy without one, then add that.`);
+    const read = kind === 'sheet' ? workbookText : kind === 'slides' ? slidesText : kind === 'opendoc' ? openDocumentText : epubText;
+    return { kind, text: await read(zip) };
+  }
   if (kind === 'pdf') {
     const pdfjs = await import('pdfjs-dist');
     const worker = (await import('pdfjs-dist/build/pdf.worker.min.mjs?url')).default;

@@ -8,9 +8,19 @@ export const FREE_FEATURES = [
 ];
 
 export const PRO_FEATURES = [
-  'Chip’s best model (Claude Opus) for deep tutoring and feedback: about 100 in-depth messages a month',
-  'About 40 quick messages a day on top, with Chip Fast',
+  'Chip’s best model (Claude Opus) for deep tutoring and feedback: about 150 in-depth messages a month, up to 20 a day',
+  'About 45 quick messages a day on top, with Chip Fast',
   'Web research: real sources, with links',
   'Bigger files (20 MB), up to 10 at a time, and 30 readings a day',
   'Everything in Free',
 ];
+
+/** The student plan: Pro, 25% off, for an account made with a school email. */
+export const STUDENT_FEATURES = [
+  'Chip’s best model (Claude Opus): about 110 in-depth messages a month, up to 15 a day',
+  'Everything else in Pro: Chip Fast on top, web research, bigger files and more readings',
+  'For an account made with your school email',
+];
+
+/** What counts as a school email, said the same way everywhere. */
+export const SCHOOL_EMAILS = 'a .edu, .ac.uk, .edu.ng or other school email';

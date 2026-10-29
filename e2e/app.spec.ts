@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { expect, test, type Page } from '@playwright/test';
 import { nothingClipped } from './layout';
 import { MockBackend } from './mock';
+import { zip } from '../tests/unit/zip_fixture';
 
 /** The journeys that matter, on every browser and size: the landing page, signing in, starting
  * something to learn and an assignment, writing (saved as you go), Chip (guiding, planning, writing
@@ -40,8 +41,12 @@ test('landing leads with learning, and every link goes somewhere', async ({ page
   await page.goto('/');
   await expect(page.getByRole('heading', { level: 1 })).toHaveText(/Understand anything\. Really learn it\./);
   await expect(page.getByRole('heading', { name: 'A tutor that helps you think.' })).toBeAttached();
-  await expect(page.getByText('$4.99')).toBeAttached();
+  await expect(page.getByText('$7.99', { exact: true })).toBeAttached();
   await expect(page.getByText('Launching soon')).toBeAttached();
+  await expect(page.getByText('Students: Pro for $5.99 a month')).toBeAttached();
+  const student = page.locator('details', { hasText: 'Is there a student discount?' });
+  await student.locator('summary').click();
+  await expect(student.getByText(/Sign up with your school email/)).toBeVisible();
   const q = page.locator('details', { hasText: 'Will it actually help me learn?' });
   await q.locator('summary').click();
   await expect(q.getByText('Chip’s default is to guide you')).toBeVisible();
@@ -213,6 +218,97 @@ test('files in the chat: a document becomes a reading, a photo goes to Chip with
   expect(last.files?.map((f) => f.name)).toEqual(['whiteboard.png']);
   await expect(page.getByRole('list', { name: 'Attached files' })).toHaveCount(0);
   await nothingClipped(page);
+});
+
+test('readings from Excel and code: Chip gets the sheets and formulas, and an old .xls says what to do', async ({ page }) => {
+  const m = new MockBackend({ tier: 'pro' });
+  m.seedAssignment();
+  await m.install(page);
+  await page.goto('/app');
+  await openSpace(page, /Coastal erosion essay/);
+  await openPanel(page, 'Sources');
+  const S = 'xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"';
+  const R = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
+  const workbook = zip({
+    'xl/workbook.xml': `<workbook ${S} xmlns:r="${R}"><sheets><sheet name="Erosion" sheetId="1" r:id="rId1"/></sheets></workbook>`,
+    'xl/_rels/workbook.xml.rels': `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="${R}/worksheet" Target="worksheets/sheet1.xml"/></Relationships>`,
+    'xl/worksheets/sheet1.xml': `<worksheet ${S}><sheetData><row r="1"><c r="A1" t="inlineStr"><is><t>Metres lost</t></is></c><c r="B1"><v>3</v></c><c r="C1"><f>B1*2</f><v>6</v></c></row></sheetData></worksheet>`,
+  });
+  // The Sources panel's picker: documents, not photos.
+  const readings = page.locator('input[type="file"][accept*=".xlsm"]:not([accept*="image"])');
+  await readings.setInputFiles([
+    { name: 'erosion.xlsm', mimeType: 'application/vnd.ms-excel.sheet.macroEnabled.12', buffer: Buffer.from(workbook) },
+    { name: 'model.py', mimeType: 'text/x-python', buffer: Buffer.from('def retreat(rate, years):\n    return rate * years  # metres lost to the sea\n') },
+  ]);
+  await expect.poll(() => m.db.study_sources.map((s) => s.file_name).sort()).toEqual(['erosion.xlsm', 'model.py']);
+  const sheet = m.db.study_sources.find((s) => s.file_name === 'erosion.xlsm')!;
+  expect(sheet.content).toContain('## Sheet "Erosion"');
+  expect(sheet.content).toContain('C1: =B1*2 → 6');
+  await readings.setInputFiles([{ name: 'old marks.xls', mimeType: 'application/vnd.ms-excel', buffer: Buffer.from('not really') }]);
+  await expect(page.getByText('Save it as an Excel workbook (.xlsx), then add that.')).toBeVisible();
+});
+
+test('signing out asks first, from the menu and from settings', async ({ page }) => {
+  const m = new MockBackend();
+  await m.install(page);
+  await page.goto('/app');
+  await page.getByRole('button', { name: 'Your account' }).click();
+  await page.getByRole('menuitem', { name: 'Sign out' }).click();
+  const ask = page.getByRole('dialog', { name: 'Sign out of Chip Study?' });
+  await expect(ask).toBeVisible();
+  await expect(ask.getByText(m.user.email)).toBeVisible();
+  await ask.getByRole('button', { name: 'Cancel' }).click();
+  await expect(ask).toHaveCount(0);
+  await expect(page).toHaveURL(/\/app$/);
+  expect(m.made('/auth/v1/logout')).toHaveLength(0);
+  await page.goto('/app/settings');
+  await page.getByRole('button', { name: 'Sign out' }).click();
+  await ask.getByRole('button', { name: 'Sign out' }).click();
+  await expect(page).toHaveURL(/\/signin$/);
+});
+
+test('a school email sees Pro at the student price, and can still pick full Pro', async ({ page }) => {
+  const m = new MockBackend({ payOn: true, student: true });
+  await m.install(page);
+  await page.route('https://checkout.flutterwave.test/**', (route) => route.fulfill({ contentType: 'text/html', body: '<h1>Checkout</h1>' }));
+  await page.goto('/app/plan');
+  await expect(page.getByText('Student price')).toBeVisible();
+  await expect(page.getByText('$5.99', { exact: true })).toBeVisible();
+  await expect(page.locator('s', { hasText: '$7.99' })).toBeVisible();
+  await expect(page.getByText(/Students get Pro/)).toHaveCount(0);
+  await nothingClipped(page);
+  await page.getByRole('button', { name: 'Go Pro for $5.99 a month' }).click();
+  await expect(page.getByRole('heading', { name: 'Checkout' })).toBeVisible();
+  const asked = () => m.made('/functions/v1/web-pay', 'POST').map((r) => r.body as { action: string; plan?: string }).filter((b) => b.action === 'subscribe');
+  expect(asked().at(-1)?.plan).toBe('study.pro.student.monthly');
+  await page.goto('/app/plan');
+  await page.getByRole('button', { name: 'Full Pro is $7.99' }).click();
+  await expect(page.getByRole('heading', { name: 'Checkout' })).toBeVisible();
+  expect(asked().at(-1)?.plan).toBe('study.pro.monthly');
+});
+
+test('anyone else pays full Pro, and hears that students get it for less', async ({ page }) => {
+  const m = new MockBackend({ payOn: true });
+  await m.install(page);
+  await page.route('https://checkout.flutterwave.test/**', (route) => route.fulfill({ contentType: 'text/html', body: '<h1>Checkout</h1>' }));
+  await page.goto('/app/plan');
+  await expect(page.getByText('Students get Pro for $5.99 a month')).toBeVisible();
+  await expect(page.getByText('Student price')).toHaveCount(0);
+  await nothingClipped(page);
+  await page.getByRole('button', { name: 'Go Pro for $7.99 a month' }).click();
+  await expect(page.getByRole('heading', { name: 'Checkout' })).toBeVisible();
+  const subscribed = m.made('/functions/v1/web-pay', 'POST').map((r) => r.body as { action: string; plan?: string }).filter((b) => b.action === 'subscribe');
+  expect(subscribed.at(-1)?.plan).toBe('study.pro.monthly');
+});
+
+test('on the student plan: Pro, with the student plan’s limits', async ({ page }) => {
+  const m = new MockBackend({ tier: 'pro', plan: 'student', student: true });
+  await m.install(page);
+  await page.goto('/app/plan');
+  await expect(page.getByText('Current')).toBeVisible();
+  await expect(page.getByText('Student price')).toBeVisible();
+  await expect(page.getByText(/about 110 in-depth messages a month/)).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Cancel Pro' })).toBeVisible();
 });
 
 test('writing saves as you go, and is there after a reload', async ({ page }) => {

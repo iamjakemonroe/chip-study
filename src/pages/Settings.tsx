@@ -1,6 +1,7 @@
 import { LogOut, Trash2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router';
+import { SignOutConfirm } from '../components/SignOut.tsx';
 import { TopBar } from '../components/TopBar.tsx';
 import { Confirm, Segmented } from '../components/ui.tsx';
 import { forgetMe } from '../lib/api.ts';
@@ -12,11 +13,11 @@ import { toast } from '../store/toast.ts';
 export function Settings() {
   const email = useAuth((s) => s.session?.user.email ?? '');
   const me = useAuth((s) => s.me);
-  const signOut = useAuth((s) => s.signOut);
   const prefs = usePrefs();
   const plan = useFocus((s) => s.plan);
   const navigate = useNavigate();
   const [forgetting, setForgetting] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
 
   useEffect(() => {
     document.title = 'Settings · Chip Study';
@@ -43,15 +44,10 @@ export function Settings() {
               Plan
             </Link>
           </p>
-          <button
-            className="btn btn-ghost btn-sm mt-4"
-            onClick={async () => {
-              await signOut();
-              navigate('/signin', { replace: true });
-            }}
-          >
+          <button className="btn btn-ghost btn-sm mt-4" onClick={() => setSigningOut(true)}>
             <LogOut size={15} /> Sign out
           </button>
+          <SignOutConfirm open={signingOut} onClose={() => setSigningOut(false)} />
         </Section>
 
         <Section title="Writing">

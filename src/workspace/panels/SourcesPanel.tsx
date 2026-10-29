@@ -3,6 +3,7 @@ import { useMemo, useRef, useState } from 'react';
 import { Modal, Segmented, Spinner } from '../../components/ui.tsx';
 import { addSource, deleteSource, updateAssignment, updateSource } from '../../lib/api.ts';
 import { html, inText, KIND_NAMES, reference, referenceList } from '../../lib/citations.ts';
+import { ACCEPT_DOCUMENTS } from '../../lib/filetypes.ts';
 import type { Source, SourceData, SourceKind, Style } from '../../lib/types.ts';
 import { addReadings } from '../../lib/readings.ts';
 import { useAuth } from '../../store/auth.ts';
@@ -61,14 +62,14 @@ export function SourcesPanel({ onFind }: { onFind: () => void }) {
           <button className="btn btn-ghost btn-sm" onClick={() => setEditing('new')}>
             <Plus size={15} /> Source
           </button>
-          <button className="btn btn-ghost btn-sm" onClick={() => fileInput.current?.click()} disabled={reading} title="Add readings (PDF or Word, several at once) for Chip to read with you">
+          <button className="btn btn-ghost btn-sm" onClick={() => fileInput.current?.click()} disabled={reading} title="Add readings (PDF, Word, Excel, PowerPoint, text or code, several at once) for Chip to read with you">
             {reading ? <Spinner /> : <FileUp size={15} />} Reading
           </button>
           <input
             ref={fileInput}
             type="file"
             className="hidden"
-            accept=".pdf,.docx,.txt,.md,application/pdf"
+            accept={ACCEPT_DOCUMENTS}
             multiple
             onChange={(e) => {
               const files = Array.from(e.target.files ?? []);

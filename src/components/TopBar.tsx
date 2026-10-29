@@ -5,12 +5,13 @@ import { chipTime, describe } from '../lib/allowance.ts';
 import { useAuth } from '../store/auth.ts';
 import { clock, remaining, useFocus } from '../store/focus.ts';
 import { Logo } from './Logo.tsx';
+import { SignOutConfirm } from './SignOut.tsx';
 import { Menu, MenuItem, Ring } from './ui.tsx';
 
 /** The bar across the top of the desk, the plan and settings. */
 export function TopBar() {
   const navigate = useNavigate();
-  const signOut = useAuth((s) => s.signOut);
+  const [signingOut, setSigningOut] = useState(false);
   const email = useAuth((s) => s.session?.user.email ?? '');
   const me = useAuth((s) => s.me);
   const initial = (me?.name || email || '?').trim()[0]?.toUpperCase() ?? '?';
@@ -70,19 +71,13 @@ export function TopBar() {
                   Privacy
                 </MenuItem>
                 <div className="my-1 h-px bg-line" />
-                <MenuItem
-                  icon={<LogOut size={15} />}
-                  onClick={async () => {
-                    close();
-                    await signOut();
-                    navigate('/signin', { replace: true });
-                  }}
-                >
+                <MenuItem icon={<LogOut size={15} />} onClick={() => (close(), setSigningOut(true))}>
                   Sign out
                 </MenuItem>
               </>
             )}
           </Menu>
+          <SignOutConfirm open={signingOut} onClose={() => setSigningOut(false)} />
         </div>
       </div>
       <nav className="flex items-center gap-1 px-4 pb-2 sm:hidden" aria-label="Main">
