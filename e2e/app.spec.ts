@@ -311,6 +311,66 @@ test('on the student plan: Pro, with the student plan’s limits', async ({ page
   await expect(page.getByRole('button', { name: 'Cancel Pro' })).toBeVisible();
 });
 
+/** Keeps what the plan page has shown, in order, from the first thing on it: Chip's loader, the
+ * Pro price, the button to pay. */
+async function watchPlan(page: Page) {
+  await page.addInitScript(() => {
+    const seen: string[] = [];
+    Object.assign(window, { planSeen: seen });
+    new MutationObserver(() => {
+      const text = document.querySelector('main')?.textContent ?? '';
+      const now = [text.includes('Opening your plan') && 'loader', text.includes('$7.99') && 'price', text.includes('Go Pro for') && 'button'].filter(Boolean).join(' + ');
+      if (now && now !== seen.at(-1)) seen.push(now);
+    }).observe(document, { childList: true, subtree: true, characterData: true });
+  });
+  return () => page.evaluate(() => (window as unknown as { planSeen: string[] }).planSeen);
+}
+
+const statusChecks = (m: MockBackend) => m.made('/functions/v1/web-pay', 'POST').filter((r) => (r.body as { action: string }).action === 'status').length;
+
+test('the plan shows all at once: Chip’s loader, then the price and the button together', async ({ page }) => {
+  const m = new MockBackend({ payOn: true, payStatus: 2000 });
+  await m.install(page);
+  const seen = await watchPlan(page);
+  await page.goto('/app/plan');
+  const loader = page.getByRole('status').filter({ hasText: 'Opening your plan' });
+  await expect(loader).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Go Pro for $7.99 a month' })).toBeVisible();
+  await expect(loader).toHaveCount(0);
+  expect(await seen()).toEqual(['loader', 'price + button']);
+  // Asked once a visit: back on the plan, it's all there from the start, and nothing is asked again.
+  await page.getByRole('link', { name: 'Your desk' }).click();
+  await expect(page).toHaveURL(/\/app$/);
+  await page.getByRole('link', { name: 'Pro', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Go Pro for $7.99 a month' })).toBeVisible();
+  expect(await seen()).toEqual(['loader', 'price + button']);
+  expect(statusChecks(m)).toBe(1);
+});
+
+test('when the check for Pro never answers, the plan stops waiting and says Pro is coming soon', async ({ page }) => {
+  const m = new MockBackend({ payOn: true, payStatus: 'never' });
+  await m.install(page);
+  await page.goto('/app/plan');
+  await expect(page.getByRole('status').filter({ hasText: 'Opening your plan' })).toBeVisible();
+  await expect(page.getByText('Coming soon')).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByText('$7.99', { exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: /Go Pro/ })).toHaveCount(0);
+});
+
+test('a check for Pro that failed is asked again the next time the plan opens', async ({ page }) => {
+  const m = new MockBackend({ payOn: true, payStatus: 'error' });
+  await m.install(page);
+  await page.goto('/app/plan');
+  await expect(page.getByText('Coming soon')).toBeVisible();
+  const before = statusChecks(m);
+  m.opts.payStatus = undefined;
+  await page.getByRole('link', { name: 'Your desk' }).click();
+  await expect(page).toHaveURL(/\/app$/);
+  await page.getByRole('link', { name: 'Pro', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Go Pro for $7.99 a month' })).toBeVisible();
+  expect(statusChecks(m)).toBe(before + 1);
+});
+
 test('writing saves as you go, and is there after a reload', async ({ page }) => {
   const m = new MockBackend();
   m.seedAssignment();

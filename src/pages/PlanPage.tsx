@@ -1,11 +1,12 @@
 import { Check, GraduationCap, Sparkles, Zap } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router';
+import { ChipLoader } from '../components/ChipLoader.tsx';
 import { Orb } from '../components/Orb.tsx';
 import { TopBar } from '../components/TopBar.tsx';
 import { Confirm, Ring, Spinner } from '../components/ui.tsx';
 import { chipTime, describe } from '../lib/allowance.ts';
-import { cancelPro, confirmPayment, payStatus, subscribePro } from '../lib/api.ts';
+import { cancelPro, confirmPayment, knownPayStatus, PAY_WAIT, payStatus, subscribePro, type PayStatus } from '../lib/api.ts';
 import { FREE_FEATURES, PRO_FEATURES, SCHOOL_EMAILS, STUDENT_FEATURES } from '../content/plans.ts';
 import { site } from '../content/site.ts';
 import { useAuth } from '../store/auth.ts';
@@ -13,21 +14,26 @@ import { toast } from '../store/toast.ts';
 
 /** Your plan: what's left of Chip time, Free and Pro side by side, and paying for Pro (once it's
  * open). A school email sees Pro at the student price (and can still pick full Pro); anyone else
- * hears that students get it. Coming back from Flutterwave's checkout lands here to confirm the
- * payment. */
+ * hears that students get it. Chip's loader stands in until all of it is known, then it shows at
+ * once. Coming back from Flutterwave's checkout lands here to confirm the payment. */
 export function PlanPage() {
   const me = useAuth((s) => s.me);
   const refresh = useAuth((s) => s.refresh);
   const [params, setParams] = useSearchParams();
-  const [pay, setPay] = useState<{ on: boolean; test: boolean } | null>(null);
+  // Null until the plans can show: straight away when it's all known already.
+  const [pay, setPay] = useState<PayStatus | null>(() => (me ? knownPayStatus() : null));
   const [busy, setBusy] = useState<'pro' | 'student' | null>(null);
   const [cancelling, setCancelling] = useState(false);
   const confirmed = useRef(false);
 
   useEffect(() => {
     document.title = 'Your plan · Chip Study';
-    void payStatus().then(setPay);
-    void refresh();
+    const account = refresh();
+    // The plans show once everything on them is known, so nothing changes after they're up: whether
+    // Pro can be bought (asked as the app opened, and given up on after PAY_WAIT), and the account
+    // with its prices (the one already here, or else the one on its way, for no longer than that).
+    const here = useAuth.getState().me ?? Promise.race([account, new Promise<null>((done) => setTimeout(() => done(null), PAY_WAIT))]);
+    void Promise.all([payStatus(), here]).then(([status]) => setPay(status));
   }, [refresh]);
 
   // Back from checkout: ?status=successful&tx_ref=…&transaction_id=…
@@ -76,91 +82,97 @@ export function PlanPage() {
         <h1 className="text-[2rem] font-semibold tracking-[-0.025em]">Your plan</h1>
         <p className="mt-1 text-ink-2">Chip’s time is counted fairly: a quick question uses less than a long draft.</p>
 
-        <section className="mt-8 grid gap-4 sm:grid-cols-2">
-          <div className="card flex items-center gap-5 p-5">
-            <Ring value={fast?.share ?? 0} size={72} stroke={6} color="var(--color-sky)">
-              <Zap size={22} className="text-sky" />
-            </Ring>
-            <div>
-              <p className="text-sm font-semibold text-ink-3">Chip Fast today</p>
-              <p className="mt-0.5 text-lg font-semibold">{fast ? describe(fast) : '…'}</p>
-            </div>
+        {pay === null ? (
+          <div className="mt-8 h-80">
+            <ChipLoader page={false} label="Opening your plan" />
           </div>
-          <div className="card flex items-center gap-5 p-5">
-            <Ring value={best?.share ?? 0} size={72} stroke={6} color="var(--color-iris)">
-              <Sparkles size={22} className={best ? 'text-iris' : 'text-ink-4'} />
-            </Ring>
-            <div>
-              <p className="text-sm font-semibold text-ink-3">Chip’s best model</p>
-              <p className="mt-0.5 text-lg font-semibold">{best ? describe(best) : 'With Pro'}</p>
-              {me?.pro_until && <p className="text-sm text-ink-3">Pro until {new Date(me.pro_until).toLocaleDateString(undefined, { day: 'numeric', month: 'long' })}</p>}
+        ) : (
+          <>
+          <section className="mt-8 grid gap-4 sm:grid-cols-2">
+            <div className="card flex items-center gap-5 p-5">
+              <Ring value={fast?.share ?? 0} size={72} stroke={6} color="var(--color-sky)">
+                <Zap size={22} className="text-sky" />
+              </Ring>
+              <div>
+                <p className="text-sm font-semibold text-ink-3">Chip Fast today</p>
+                <p className="mt-0.5 text-lg font-semibold">{fast ? describe(fast) : '…'}</p>
+              </div>
             </div>
-          </div>
-        </section>
-
-        <section className="mt-10 grid gap-5 lg:grid-cols-2">
-          <PlanCard
-            name="Free"
-            price="$0"
-            note="Free, always"
-            features={FREE_FEATURES}
-            current={me?.tier === 'free'}
-            footer={me?.tier === 'free' ? <span className="text-sm font-semibold text-ink-3">Your plan</span> : null}
-          />
-          <PlanCard
-            name="Pro"
-            tag={asStudent ? 'Student price' : undefined}
-            price={`$${shown.toFixed(2)}`}
-            was={asStudent ? `$${price.toFixed(2)}` : undefined}
-            note="a month, cancel any time"
-            features={asStudent ? STUDENT_FEATURES : PRO_FEATURES}
-            current={me?.tier === 'pro'}
-            glow
-            footer={
-              me?.tier === 'pro' ? (
-                <button className="btn btn-ghost btn-sm" onClick={() => setCancelling(true)}>
-                  Cancel Pro
-                </button>
-              ) : pay === null ? (
-                <Spinner />
-              ) : open ? (
-                <div>
-                  <button className="btn btn-iris w-full sm:w-auto" disabled={!!busy} onClick={() => go(asStudent ? 'student' : 'pro')}>
-                    {busy === (asStudent ? 'student' : 'pro') ? <Spinner /> : <>Go Pro for ${shown.toFixed(2)} a month</>}
-                  </button>
-                  {asStudent && (
-                    <p className="mt-3 text-sm leading-relaxed text-ink-3">
-                      Want more of the best model?{' '}
-                      <button className="font-semibold text-iris disabled:opacity-60" disabled={!!busy} onClick={() => go('pro')}>
-                        {busy === 'pro' ? 'Opening checkout…' : `Full Pro is $${price.toFixed(2)}`}
-                      </button>
-                      , with about 150 in-depth messages a month.
-                    </p>
-                  )}
-                </div>
-              ) : (
-                <div>
-                  <span className="chip-tag bg-iris-soft text-iris-2">Coming soon</span>
-                  <p className="mt-2 text-sm leading-relaxed text-ink-3">Pro opens very soon. Everything in Free works today.</p>
-                </div>
-              )
-            }
-          />
-        </section>
-        {me?.tier === 'free' && !me.student?.eligible && (
-          <section className="card mt-5 flex gap-4 p-5" aria-label="Student price">
-            <span className="grid h-10 w-10 flex-none place-items-center rounded-full bg-mint-soft text-mint">
-              <GraduationCap size={20} />
-            </span>
-            <div>
-              <p className="font-semibold">Students get Pro for ${studentPrice.toFixed(2)} a month</p>
-              <p className="mt-1 text-sm leading-relaxed text-ink-3">
-                That’s {Math.round((1 - studentPrice / price) * 100)}% off, on an account made with your school email ({SCHOOL_EMAILS}). It’s everything in Pro, with about 110 in-depth messages a month from Chip’s best model.
-              </p>
+            <div className="card flex items-center gap-5 p-5">
+              <Ring value={best?.share ?? 0} size={72} stroke={6} color="var(--color-iris)">
+                <Sparkles size={22} className={best ? 'text-iris' : 'text-ink-4'} />
+              </Ring>
+              <div>
+                <p className="text-sm font-semibold text-ink-3">Chip’s best model</p>
+                <p className="mt-0.5 text-lg font-semibold">{best ? describe(best) : 'With Pro'}</p>
+                {me?.pro_until && <p className="text-sm text-ink-3">Pro until {new Date(me.pro_until).toLocaleDateString(undefined, { day: 'numeric', month: 'long' })}</p>}
+              </div>
             </div>
           </section>
+
+          <section className="mt-10 grid gap-5 lg:grid-cols-2">
+            <PlanCard
+              name="Free"
+              price="$0"
+              note="Free, always"
+              features={FREE_FEATURES}
+              current={me?.tier === 'free'}
+              footer={me?.tier === 'free' ? <span className="text-sm font-semibold text-ink-3">Your plan</span> : null}
+            />
+            <PlanCard
+              name="Pro"
+              tag={asStudent ? 'Student price' : undefined}
+              price={`$${shown.toFixed(2)}`}
+              was={asStudent ? `$${price.toFixed(2)}` : undefined}
+              note="a month, cancel any time"
+              features={asStudent ? STUDENT_FEATURES : PRO_FEATURES}
+              current={me?.tier === 'pro'}
+              glow
+              footer={
+                me?.tier === 'pro' ? (
+                  <button className="btn btn-ghost btn-sm" onClick={() => setCancelling(true)}>
+                    Cancel Pro
+                  </button>
+                ) : open ? (
+                  <div>
+                    <button className="btn btn-iris w-full sm:w-auto" disabled={!!busy} onClick={() => go(asStudent ? 'student' : 'pro')}>
+                      {busy === (asStudent ? 'student' : 'pro') ? <Spinner /> : <>Go Pro for ${shown.toFixed(2)} a month</>}
+                    </button>
+                    {asStudent && (
+                      <p className="mt-3 text-sm leading-relaxed text-ink-3">
+                        Want more of the best model?{' '}
+                        <button className="font-semibold text-iris disabled:opacity-60" disabled={!!busy} onClick={() => go('pro')}>
+                          {busy === 'pro' ? 'Opening checkout…' : `Full Pro is $${price.toFixed(2)}`}
+                        </button>
+                        , with about 150 in-depth messages a month.
+                      </p>
+                    )}
+                  </div>
+                ) : (
+                  <div>
+                    <span className="chip-tag bg-iris-soft text-iris-2">Coming soon</span>
+                    <p className="mt-2 text-sm leading-relaxed text-ink-3">Pro opens very soon. Everything in Free works today.</p>
+                  </div>
+                )
+              }
+            />
+          </section>
+          {me?.tier === 'free' && !me.student?.eligible && (
+            <section className="card mt-5 flex gap-4 p-5" aria-label="Student price">
+              <span className="grid h-10 w-10 flex-none place-items-center rounded-full bg-mint-soft text-mint">
+                <GraduationCap size={20} />
+              </span>
+              <div>
+                <p className="font-semibold">Students get Pro for ${studentPrice.toFixed(2)} a month</p>
+                <p className="mt-1 text-sm leading-relaxed text-ink-3">
+                  That’s {Math.round((1 - studentPrice / price) * 100)}% off, on an account made with your school email ({SCHOOL_EMAILS}). It’s everything in Pro, with about 110 in-depth messages a month from Chip’s best model.
+                </p>
+              </div>
+            </section>
+          )}
+          <p className="mt-6 text-center text-sm text-ink-3">Prices in US dollars. Your card’s bank converts if it’s in another currency. Payments by Flutterwave.</p>
+          </>
         )}
-        <p className="mt-6 text-center text-sm text-ink-3">Prices in US dollars. Your card’s bank converts if it’s in another currency. Payments by Flutterwave.</p>
       </main>
       <Confirm
         open={cancelling}

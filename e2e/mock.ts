@@ -43,6 +43,9 @@ export interface MockOptions {
   student?: boolean;
   /** Whether Pro can be bought (live Flutterwave keys). */
   payOn?: boolean;
+  /** How the check for whether Pro can be bought answers: at once (the default), after a wait (in
+   * ms), with a server error, or never. */
+  payStatus?: number | 'error' | 'never';
   /** Chip has no time left today. */
   chipOut?: boolean;
   name?: string;
@@ -267,8 +270,15 @@ export class MockBackend {
     return this.json(route, { message: `unknown function ${fn}` }, 404);
   }
 
-  private pay(route: Route, body: Record<string, unknown>) {
-    if (body?.action === 'status') return this.json(route, { on: !!this.opts.payOn, test: false });
+  private async pay(route: Route, body: Record<string, unknown>) {
+    if (body?.action === 'status') {
+      const how = this.opts.payStatus;
+      if (how === 'never') return;
+      if (how === 'error') return this.json(route, { error: 'Unavailable' }, 500);
+      if (how) await new Promise((done) => setTimeout(done, how));
+      // The app may have stopped waiting (or the test ended) by then.
+      return this.json(route, { on: !!this.opts.payOn, test: false }).catch(() => undefined);
+    }
     if (body?.action === 'subscribe') {
       if (!this.opts.payOn) return this.json(route, { error: 'off' }, 503);
       if (body.plan === 'study.pro.student.monthly' && !this.opts.student) return this.json(route, { error: 'school' }, 400);

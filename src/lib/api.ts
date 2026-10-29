@@ -294,13 +294,46 @@ export async function logUse(
 
 // ── Payments (the web-pay function, Flutterwave) ──────────────────────
 
-export async function payStatus(): Promise<{ on: boolean; test: boolean }> {
+/** Whether Pro can be bought (live Flutterwave keys), and whether the keys are test ones. */
+export interface PayStatus {
+  on: boolean;
+  test: boolean;
+}
+
+/** The longest the check for whether Pro can be bought takes: no answer by then counts as not open
+ * yet, so the plan page never waits on it for long. */
+export const PAY_WAIT = 4500;
+
+let payAsked: Promise<PayStatus> | null = null;
+let payKnown: PayStatus | null = null;
+
+/** Whether Pro can be bought, asked once a session (as the app opens, so the plan page has it
+ * ready) and kept. A check that failed or ran out of time counts as not open, and is asked again
+ * the next time. */
+export function payStatus(): Promise<PayStatus> {
+  payAsked ??= askPayStatus().then((status) => {
+    if (status) {
+      payKnown = status;
+      return status;
+    }
+    payAsked = null;
+    return { on: false, test: false };
+  });
+  return payAsked;
+}
+
+/** payStatus's answer once it's in, to show straight away rather than wait a moment for it. */
+export function knownPayStatus(): PayStatus | null {
+  return payKnown;
+}
+
+async function askPayStatus(): Promise<PayStatus | null> {
   try {
-    const { data, error } = await supabase.functions.invoke('web-pay', { body: { action: 'status' } });
-    if (error || !data) return { on: false, test: false };
+    const { data, error } = await supabase.functions.invoke('web-pay', { body: { action: 'status' }, timeout: PAY_WAIT });
+    if (error || !data) return null;
     return { on: !!data.on, test: !!data.test };
   } catch {
-    return { on: false, test: false };
+    return null;
   }
 }
 
