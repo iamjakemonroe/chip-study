@@ -35,6 +35,7 @@ import { useFocus } from '../store/focus.ts';
 import { usePrefs } from '../store/prefs.ts';
 import { toast } from '../store/toast.ts';
 import { ChipPanel, sendToChip } from './chip/ChipPanel.tsx';
+import NewCodeFile, { type NewFile } from './code/NewCodeFile.tsx';
 import { DocEditor } from './DocEditor.tsx';
 import { FocusBar, FocusScene } from './FocusMode.tsx';
 import { BriefPanel } from './panels/BriefPanel.tsx';
@@ -341,6 +342,21 @@ function DocTabs() {
   const [renaming, setRenaming] = useState<StudyDocument | null>(null);
   const [removing, setRemoving] = useState<StudyDocument | null>(null);
   const [name, setName] = useState('');
+  const [newCode, setNewCode] = useState(false);
+
+  const addCode = async (files: NewFile[]) => {
+    try {
+      let first: string | null = null;
+      for (const f of files) {
+        const d = await createDocument(assignment.id, 'code', f.name, useWorkspace.getState().docs.length, { lang: f.lang, code: f.code });
+        first ??= d.id;
+        useWorkspace.setState({ docs: [...useWorkspace.getState().docs, d] });
+      }
+      if (first) useWorkspace.setState({ activeDoc: first, selection: '' });
+    } catch (e) {
+      toast((e as Error).message, 'warn');
+    }
+  };
 
   const add = async (kind: DocKind) => {
     const title = kind === 'code' ? 'main.py' : kind === 'sheet' ? 'Table' : `Document ${docs.filter((d) => d.kind === 'doc').length + 1}`;
@@ -387,7 +403,7 @@ function DocTabs() {
             <MenuItem icon={<PenLine size={15} />} onClick={() => (close(), void add('doc'))}>
               Document
             </MenuItem>
-            <MenuItem icon={<Code2 size={15} />} onClick={() => (close(), void add('code'))}>
+            <MenuItem icon={<Code2 size={15} />} onClick={() => (close(), setNewCode(true))}>
               Code
             </MenuItem>
             <MenuItem icon={<Table2 size={15} />} onClick={() => (close(), void add('sheet'))}>
@@ -396,6 +412,7 @@ function DocTabs() {
           </>
         )}
       </Menu>
+      <NewCodeFile open={newCode} onClose={() => setNewCode(false)} taken={docs.map((d) => d.title)} onCreate={addCode} />
       <Modal open={!!renaming} onClose={() => setRenaming(null)} title="Rename" width={420}>
         <form
           onSubmit={async (e) => {
