@@ -187,4 +187,7 @@ export interface Me {
   /** Whether this account's email is a school's (confirmed), which gets the student price. */
   student?: { eligible: boolean; domain: string | null };
   student_price?: { amount: number; currency: string } | null;
+  /** Each plan's price in every currency it has one in. */
+  prices?: Record<string, number> | null;
+  student_prices?: Record<string, number> | null;
 }

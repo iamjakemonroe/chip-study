@@ -11,6 +11,7 @@ import { FREE_FEATURES, PRO_FEATURES, SCHOOL_EMAILS, STUDENT_FEATURES } from '..
 import { site } from '../content/site.ts';
 import { useAuth } from '../store/auth.ts';
 import { toast } from '../store/toast.ts';
+import { CURRENCY, fromUsd, money } from '../lib/currency.ts';
 
 /** Your plan: what's left of Chip time, Free and Pro side by side, and paying for Pro (once it's
  * open). A school email sees Pro at the student price (and can still pick full Pro); anyone else
@@ -59,8 +60,10 @@ export function PlanPage() {
   const open = !!pay?.on && !pay.test;
   const fast = me ? chipTime(me, 'fast') : null;
   const best = me ? chipTime(me, 'best') : null;
-  const price = me?.price?.amount ?? site.price;
-  const studentPrice = me?.student_price?.amount ?? site.studentPrice;
+  // In this buyer's currency: naira in Nigeria.
+  const price = me?.prices?.[CURRENCY] ?? (CURRENCY === 'USD' ? me?.price?.amount : undefined) ?? fromUsd(site.price);
+  const studentPrice =
+    me?.student_prices?.[CURRENCY] ?? (CURRENCY === 'USD' ? me?.student_price?.amount : undefined) ?? fromUsd(site.studentPrice);
   // The Pro card shows the student plan to a school email without Pro, and to its members.
   const asStudent = me?.plan === 'student' || (me?.tier === 'free' && !!me.student?.eligible);
   const shown = asStudent ? studentPrice : price;
@@ -122,8 +125,8 @@ export function PlanPage() {
             <PlanCard
               name="Pro"
               tag={asStudent ? 'Student price' : undefined}
-              price={`$${shown.toFixed(2)}`}
-              was={asStudent ? `$${price.toFixed(2)}` : undefined}
+              price={money(shown)}
+              was={asStudent ? money(price) : undefined}
               note="a month, cancel any time"
               features={asStudent ? STUDENT_FEATURES : PRO_FEATURES}
               current={me?.tier === 'pro'}
@@ -136,13 +139,13 @@ export function PlanPage() {
                 ) : open ? (
                   <div>
                     <button className="btn btn-iris w-full sm:w-auto" disabled={!!busy} onClick={() => go(asStudent ? 'student' : 'pro')}>
-                      {busy === (asStudent ? 'student' : 'pro') ? <Spinner /> : <>Go Pro for ${shown.toFixed(2)} a month</>}
+                      {busy === (asStudent ? 'student' : 'pro') ? <Spinner /> : <>Go Pro for {money(shown)} a month</>}
                     </button>
                     {asStudent && (
                       <p className="mt-3 text-sm leading-relaxed text-ink-3">
                         Want more of the best model?{' '}
                         <button className="font-semibold text-iris disabled:opacity-60" disabled={!!busy} onClick={() => go('pro')}>
-                          {busy === 'pro' ? 'Opening checkout…' : `Full Pro is $${price.toFixed(2)}`}
+                          {busy === 'pro' ? 'Opening checkout…' : `Full Pro is ${money(price)}`}
                         </button>
                         , with about 150 in-depth messages a month.
                       </p>
@@ -163,7 +166,7 @@ export function PlanPage() {
                 <GraduationCap size={20} />
               </span>
               <div>
-                <p className="font-semibold">Students get Pro for ${studentPrice.toFixed(2)} a month</p>
+                <p className="font-semibold">Students get Pro for {money(studentPrice)} a month</p>
                 <p className="mt-1 text-sm leading-relaxed text-ink-3">
                   That’s {Math.round((1 - studentPrice / price) * 100)}% off, on an account made with your school email ({SCHOOL_EMAILS}). It’s everything in Pro, with about 110 in-depth messages a month from Chip’s best model.
                 </p>

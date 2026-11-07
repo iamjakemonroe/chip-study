@@ -1,4 +1,5 @@
 import { supabase } from './supabase.ts';
+import { CURRENCY } from './currency.ts';
 import type {
   Assignment,
   Card,
@@ -341,7 +342,7 @@ async function askPayStatus(): Promise<PayStatus | null> {
  * and answers the checkout link. */
 export async function subscribePro(plan: 'pro' | 'student' = 'pro'): Promise<string> {
   const { data, error } = await supabase.functions.invoke('web-pay', {
-    body: { action: 'subscribe', plan: plan === 'student' ? 'study.pro.student.monthly' : 'study.pro.monthly', currency: 'USD', app: 'study' },
+    body: { action: 'subscribe', plan: plan === 'student' ? 'study.pro.student.monthly' : 'study.pro.monthly', currency: CURRENCY, app: 'study' },
   });
   const link = (data as { link?: string } | null)?.link;
   if (error || !link || !link.startsWith('https://')) {
