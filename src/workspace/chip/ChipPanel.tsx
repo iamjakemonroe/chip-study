@@ -1,5 +1,6 @@
 import { motion } from 'framer-motion';
 import {
+  GraduationCap,
   ArrowUp,
   BookMarked,
   Brain,
@@ -23,7 +24,7 @@ import {
   X,
   Zap,
 } from 'lucide-react';
-import { memo, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router';
 import { Orb } from '../../components/Orb.tsx';
 import { AutoTextarea, Menu, MenuItem, Spinner } from '../../components/ui.tsx';
@@ -39,7 +40,7 @@ import type { Mode } from '../../lib/types.ts';
 import { useAuth } from '../../store/auth.ts';
 import { usePrefs } from '../../store/prefs.ts';
 import { toast } from '../../store/toast.ts';
-import { editors, useWorkspace, type ChatMessage } from '../store.ts';
+import { editors, loadTutor, useWorkspace, type ChatMessage } from '../store.ts';
 import { CardsCard, DraftCard, PendingCard, QuizCard, RubricCard, SourcesCard, TasksCard } from './cards.tsx';
 
 type Tries = { topic: string[]; assignment: string[] };
@@ -257,6 +258,11 @@ export function stopChip() {
 
 /** Chip, beside the document: modes, the conversation and the composer. */
 export function ChipPanel({ onClose }: { onClose?: () => void }) {
+  const classId = useWorkspace((s) => s.assignment?.class_id ?? null);
+  const tutor = useWorkspace((s) => s.tutor);
+  useEffect(() => {
+    void loadTutor(classId);
+  }, [classId]);
   const messages = useWorkspace((s) => s.messages);
   const streaming = useWorkspace((s) => s.streaming);
   const mode = useWorkspace((s) => s.mode);
@@ -381,6 +387,15 @@ export function ChipPanel({ onClose }: { onClose?: () => void }) {
         )}
       </div>
 
+      {tutor && (
+        <p
+          className="mx-4 mb-2.5 flex items-center gap-2 rounded-xl bg-mint-soft/70 px-3 py-1.5 text-xs font-medium text-[#16795f]"
+          title={tutor.help_level === 'hints' ? 'Hints and next steps only in this course.' : tutor.help_level === 'explain' ? 'Explanations and feedback, but no drafting, in this course.' : 'Chip helps in its usual way in this course.'}
+        >
+          <GraduationCap size={14} className="flex-none" />
+          <span className="min-w-0 truncate">Chip follows your lecturer’s guidance for {tutor.name}</span>
+        </p>
+      )}
       <div className="flex flex-wrap gap-1.5 px-4 pb-3" role="tablist" aria-label="What Chip does">
         {MODES.map((m) => (
           <button

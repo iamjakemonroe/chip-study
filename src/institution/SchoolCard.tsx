@@ -2,6 +2,7 @@ import { GraduationCap } from 'lucide-react';
 import { useState } from 'react';
 import { joinByEmail } from '../lib/api.ts';
 import type { SuggestedInstitution } from '../lib/types.ts';
+import { useAge } from '../store/age.ts';
 import { useAuth } from '../store/auth.ts';
 import { useInstitutions } from '../store/institutions.ts';
 import { toast } from '../store/toast.ts';
@@ -63,7 +64,7 @@ export function SchoolCard() {
         name={asking?.name}
         yes={`Join ${asking?.name ?? ''}`}
         onYes={async () => {
-          if (!asking) return;
+          if (!asking || !(await useAge.getState().ensure())) return;
           const r = await joinByEmail(asking.id);
           await Promise.all([useAuth.getState().refresh(), useInstitutions.getState().load(true)]);
           setAsking(null);

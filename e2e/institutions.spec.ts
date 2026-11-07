@@ -39,9 +39,12 @@ test('the page for institutions: who it’s for, what staff can and can’t see,
   const faq = page.locator('details', { hasText: 'We already give students an AI tool' });
   await faq.locator('summary').click();
   await expect(faq.getByText(/Keep it\. Chip Study works alongside/)).toBeVisible();
-  await expect(page.getByRole('link', { name: 'Ask us about pricing' })).toHaveAttribute('href', /^mailto:support@kaivon\.app/);
-  // No price list, no made-up numbers.
-  expect(await page.locator('main').textContent()).not.toMatch(/[$₦]\s?\d/);
+  // The price, in naira first in Lagos, with the others beside it.
+  const pricing = page.locator('#pricing');
+  await expect(pricing.getByText('₦45,000', { exact: true })).toBeAttached();
+  await expect(pricing.getByText(/Billed yearly by invoice, from 50 students, after a free one-term pilot/)).toBeAttached();
+  for (const other of ['£36', '$45', '€42']) await expect(pricing.getByText(other, { exact: true })).toBeAttached();
+  await expect(page.getByText(/Ask us about pricing/i)).toHaveCount(0);
   await nothingClipped(page);
   await page.getByRole('link', { name: /Register your institution/ }).first().click();
   await expect(page).toHaveURL(/\/signin\?next=%2Fapp%2Finstitutions%2Fnew$/);
@@ -55,6 +58,8 @@ test('registering an institution: the form, then waiting for Kaivon to check it'
   await expect(page.getByRole('heading', { name: 'Register your institution' })).toBeVisible();
   await page.getByLabel('Name', { exact: true }).fill('Lagos Bay School');
   await page.getByRole('radio', { name: 'School' }).click();
+  // Picking the kind never sends the form.
+  await expect(page.getByRole('alert')).toHaveCount(0);
   await page.getByLabel('Country').selectOption('NG');
   await page.getByLabel('Website').fill('www.lagosbay.sch.ng');
   await page.getByLabel('Website').blur();
@@ -104,6 +109,7 @@ test('an admin’s dashboard: this week, the students, and a student’s record'
   await expect(page).toHaveURL(new RegExp(`/app/institution/${inst.id}$`));
   await expect(page.getByRole('heading', { level: 1, name: 'Lagos Bay University' })).toBeVisible();
   await expect(page.getByText(/Free pilot until/)).toBeVisible();
+  await expect(page.getByText(/After the pilot it’s ₦45,000 per student per year, billed yearly by invoice, from 50 students/)).toBeVisible();
   await expect(page.getByRole('meter', { name: 'Seats used' })).toHaveAttribute('aria-valuenow', '3');
   await expect(page.getByText('of 50 used')).toBeVisible();
   await expect(page.getByText('Questions to Chip')).toBeVisible();
@@ -395,7 +401,7 @@ test('Pro through an institution: the plan says whose, with nothing to buy or ca
   await m.install(page);
   await page.goto('/app/plan');
   await expect(page.getByText('Pro through Lagos Bay University').first()).toBeVisible();
-  await expect(page.getByText(/with nothing to pay/)).toBeVisible();
+  await expect(page.getByText(/with nothing to pay, with a little less of Chip’s best model than personal Pro/)).toBeVisible();
   await expect(page.getByRole('button', { name: 'Cancel Pro' })).toHaveCount(0);
   await expect(page.getByRole('button', { name: /Go Pro/ })).toHaveCount(0);
   await nothingClipped(page);

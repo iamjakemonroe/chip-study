@@ -207,6 +207,12 @@ describe('proThrough', () => {
     expect(proThrough({ tier: 'pro', pro_until: null }, null)).toBeNull();
     expect(proThrough(null, [inst({})])).toBeNull();
   });
+
+  it('goes by the server’s via_institution when it says', () => {
+    // Paid-for Pro that also has an institution: Pro is their own.
+    expect(proThrough({ tier: 'pro', pro_until: null, via_institution: false }, [inst({})])).toBeNull();
+    expect(proThrough({ tier: 'pro', pro_until: '2026-12-01T00:00:00Z', via_institution: true }, [inst({ id: 'b' })])?.id).toBe('b');
+  });
 });
 
 describe('institutionError', () => {

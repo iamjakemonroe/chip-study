@@ -7,13 +7,13 @@ import { TopBar } from '../components/TopBar.tsx';
 import { Confirm, Ring, Spinner } from '../components/ui.tsx';
 import { chipTime, describe } from '../lib/allowance.ts';
 import { cancelPro, confirmPayment, knownPayStatus, PAY_WAIT, payStatus, subscribePro, type PayStatus } from '../lib/api.ts';
-import { FREE_FEATURES, PRO_FEATURES, SCHOOL_EMAILS, STUDENT_FEATURES } from '../content/plans.ts';
+import { FREE_FEATURES, INSTITUTION_FEATURES, PRO_FEATURES, SCHOOL_EMAILS, STUDENT_FEATURES } from '../content/plans.ts';
 import { site } from '../content/site.ts';
 import { useAuth } from '../store/auth.ts';
 import { useInstitutions } from '../store/institutions.ts';
 import { toast } from '../store/toast.ts';
-import { CURRENCY, fromUsd, money } from '../lib/currency.ts';
-import { proThrough } from '../lib/institutions.ts';
+import { CURRENCY, fromUsd, money, priceNote } from '../lib/currency.ts';
+import { proThrough, VIA_INSTITUTION_NOTE } from '../lib/institutions.ts';
 import type { Me } from '../lib/types.ts';
 
 /** Your plan: what's left of Chip time, Free and Pro side by side, and paying for Pro (once it's
@@ -43,7 +43,7 @@ export function PlanPage() {
     // Pro with no paid-until date may come from an institution: which one is known first, so the
     // plans never show a Cancel button that then turns into the institution's name.
     const whose = (m: Me | null) =>
-      m?.tier === 'pro' && !m.pro_until ? Promise.race([useInstitutions.getState().load(), new Promise((done) => setTimeout(done, PAY_WAIT))]) : null;
+      m?.tier === 'pro' && (m.via_institution ?? !m.pro_until) ? Promise.race([useInstitutions.getState().load(), new Promise((done) => setTimeout(done, PAY_WAIT))]) : null;
     void Promise.all([payStatus(), Promise.resolve(here).then(whose)]).then(([status]) => setPay(status));
   }, [refresh]);
 
@@ -139,7 +139,7 @@ export function PlanPage() {
               price={through ? 'Included' : money(shown)}
               was={asStudent && !through ? money(price) : undefined}
               note={through ? `through ${through.name}` : 'a month, cancel any time'}
-              features={asStudent ? STUDENT_FEATURES : PRO_FEATURES}
+              features={through ? INSTITUTION_FEATURES : asStudent ? STUDENT_FEATURES : PRO_FEATURES}
               current={me?.tier === 'pro'}
               glow
               footer={
@@ -149,7 +149,7 @@ export function PlanPage() {
                     <div>
                       <p className="font-semibold text-ink">Pro through {through.name}</p>
                       <p className="mt-0.5 text-sm leading-relaxed text-ink-2">
-                        It’s yours while you’re part of {through.name}, with nothing to pay.{' '}
+                        It’s yours while you’re part of {through.name}, with nothing to pay, {VIA_INSTITUTION_NOTE}.{' '}
                         <Link to="/app/settings#institution" className="font-semibold text-[#16795f] underline underline-offset-2">
                           Your institution
                         </Link>
@@ -197,7 +197,7 @@ export function PlanPage() {
               </div>
             </section>
           )}
-          <p className="mt-6 text-center text-sm text-ink-3">Prices in US dollars. Your card’s bank converts if it’s in another currency. Payments by Flutterwave.</p>
+          <p className="mt-6 text-center text-sm text-ink-3">{priceNote()}</p>
           </>
         )}
       </main>

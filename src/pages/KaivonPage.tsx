@@ -4,12 +4,13 @@ import { Link } from 'react-router';
 import { ChipLoader } from '../components/ChipLoader.tsx';
 import { Orb } from '../components/Orb.tsx';
 import { TopBar } from '../components/TopBar.tsx';
-import { Field, Modal, Spinner } from '../components/ui.tsx';
+import { Field, Modal, Segmented, Spinner } from '../components/ui.tsx';
 import { notAllowed, staffInstitutions, staffReview, type Review } from '../lib/api.ts';
 import { toDay } from '../lib/dates.ts';
 import { cleanDomain, countryName, dayText, institutionStatus, isDomain, isPublicDomain, KIND_LABEL, TONE_CLASS } from '../lib/institutions.ts';
 import type { InstitutionStatus, StaffInstitution } from '../lib/types.ts';
 import { toast } from '../store/toast.ts';
+import { InvoicesModal, RepsPanel } from './KaivonParts.tsx';
 
 type Filter = InstitutionStatus | 'all';
 type Mode = 'approve' | 'change' | 'reject' | 'suspend' | 'paid';
@@ -30,6 +31,8 @@ export function KaivonPage() {
   const [rows, setRows] = useState<StaffInstitution[] | null>(null);
   const [state, setState] = useState<'ok' | 'denied' | 'error'>('ok');
   const [acting, setActing] = useState<{ mode: Mode; inst: StaffInstitution } | null>(null);
+  const [view, setView] = useState<'institutions' | 'reps'>('institutions');
+  const [billing, setBilling] = useState<StaffInstitution | null>(null);
 
   const load = useCallback(async (f: Filter) => {
     try {
@@ -71,53 +74,71 @@ export function KaivonPage() {
         <p className="flex items-center gap-2 text-sm font-semibold text-iris">
           <ShieldCheck size={16} /> Kaivon staff
         </p>
-        <h1 className="mt-1 text-[2rem] font-semibold tracking-[-0.025em]">Institutions</h1>
-        <p className="mt-1 max-w-2xl leading-relaxed text-ink-2">Check each one is real before its students can join. Confirm an email domain only when you’re sure it’s the institution’s: anyone with it can then take a seat.</p>
-
-        <div className="no-scrollbar mt-6 flex max-w-full overflow-x-auto">
-          <div className="flex w-full flex-none rounded-full border border-line bg-white/70 p-0.5 text-[0.8125rem] font-semibold sm:w-auto sm:text-sm" role="tablist" aria-label="Status">
-            {FILTERS.map((f) => (
-              <button
-                key={f.id}
-                role="tab"
-                aria-selected={filter === f.id}
-                onClick={() => setFilter(f.id)}
-                className={`flex-1 whitespace-nowrap rounded-full px-2 py-1.5 transition-colors sm:flex-none sm:px-3.5 ${filter === f.id ? 'bg-ink text-white' : 'text-ink-3 hover:text-ink'}`}
-              >
-                {f.label}
-              </button>
-            ))}
-          </div>
+        <div className="mt-1 flex flex-wrap items-center justify-between gap-3">
+          <h1 className="text-[2rem] font-semibold tracking-[-0.025em]">{view === 'reps' ? 'Campus reps' : 'Institutions'}</h1>
+          <Segmented
+            label="Review"
+            value={view}
+            onChange={setView}
+            options={[
+              { value: 'institutions', label: 'Institutions' },
+              { value: 'reps', label: 'Campus reps' },
+            ]}
+          />
         </div>
-
-        {state === 'error' && (
-          <p className="mt-5 rounded-2xl bg-peach-soft px-4 py-3 text-sm text-[#9a4a1b]">
-            Couldn’t load them just now.{' '}
-            <button className="font-semibold underline" onClick={() => void load(filter)}>
-              Try again
-            </button>
-          </p>
-        )}
-
-        {rows === null ? (
-          state === 'ok' && (
-            <div className="mt-6 h-56">
-              <ChipLoader page={false} label="Loading institutions" />
-            </div>
-          )
-        ) : rows.length === 0 ? (
-          <div className="mt-6 rounded-[1.5rem] border border-dashed border-line-2 bg-white/50 px-6 py-14 text-center">
-            <p className="font-semibold">{filter === 'pending' ? 'Nothing waiting' : 'None here'}</p>
-            <p className="mt-1 text-sm text-ink-3">{filter === 'pending' ? 'New registrations show up here.' : 'Try another tab.'}</p>
-          </div>
+        {view === 'reps' ? (
+          <RepsPanel />
         ) : (
-          <ul className="mt-6 space-y-4">
-            {rows.map((i) => (
-              <InstitutionCard key={i.id} i={i} onAct={(mode) => setActing({ mode, inst: i })} />
-            ))}
-          </ul>
+          <>
+            <p className="mt-1 max-w-2xl leading-relaxed text-ink-2">Check each one is real before its students can join. Confirm an email domain only when you’re sure it’s the institution’s: anyone with it can then take a seat.</p>
+
+            <div className="no-scrollbar mt-6 flex max-w-full overflow-x-auto">
+              <div className="flex w-full flex-none rounded-full border border-line bg-white/70 p-0.5 text-[0.8125rem] font-semibold sm:w-auto sm:text-sm" role="tablist" aria-label="Status">
+                {FILTERS.map((f) => (
+                  <button
+                    key={f.id}
+                    role="tab"
+                    aria-selected={filter === f.id}
+                    onClick={() => setFilter(f.id)}
+                    className={`flex-1 whitespace-nowrap rounded-full px-2 py-1.5 transition-colors sm:flex-none sm:px-3.5 ${filter === f.id ? 'bg-ink text-white' : 'text-ink-3 hover:text-ink'}`}
+                  >
+                    {f.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {state === 'error' && (
+              <p className="mt-5 rounded-2xl bg-peach-soft px-4 py-3 text-sm text-[#9a4a1b]">
+                Couldn’t load them just now.{' '}
+                <button className="font-semibold underline" onClick={() => void load(filter)}>
+                  Try again
+                </button>
+              </p>
+            )}
+
+            {rows === null ? (
+              state === 'ok' && (
+                <div className="mt-6 h-56">
+                  <ChipLoader page={false} label="Loading institutions" />
+                </div>
+              )
+            ) : rows.length === 0 ? (
+              <div className="mt-6 rounded-[1.5rem] border border-dashed border-line-2 bg-white/50 px-6 py-14 text-center">
+                <p className="font-semibold">{filter === 'pending' ? 'Nothing waiting' : 'None here'}</p>
+                <p className="mt-1 text-sm text-ink-3">{filter === 'pending' ? 'New registrations show up here.' : 'Try another tab.'}</p>
+              </div>
+            ) : (
+              <ul className="mt-6 space-y-4">
+                {rows.map((i) => (
+                  <InstitutionCard key={i.id} i={i} onAct={(mode) => setActing({ mode, inst: i })} onInvoices={() => setBilling(i)} />
+                ))}
+              </ul>
+            )}
+          </>
         )}
       </main>
+      <InvoicesModal inst={billing} onClose={() => setBilling(null)} />
       <ReviewModal
         acting={acting}
         onClose={() => setActing(null)}
@@ -131,7 +152,7 @@ export function KaivonPage() {
   );
 }
 
-function InstitutionCard({ i, onAct }: { i: StaffInstitution; onAct: (mode: Mode) => void }) {
+function InstitutionCard({ i, onAct, onInvoices }: { i: StaffInstitution; onAct: (mode: Mode) => void; onInvoices: () => void }) {
   const active = i.status === 'approved' && (i.plan === 'paid' ? !i.paid_until || i.paid_until >= toDay(new Date()) : !i.pilot_ends || i.pilot_ends >= toDay(new Date()));
   const status = institutionStatus({ ...i, active });
   return (
@@ -170,6 +191,7 @@ function InstitutionCard({ i, onAct }: { i: StaffInstitution; onAct: (mode: Mode
         {i.status === 'approved' && (
           <Item label={i.plan === 'paid' ? 'Paid until' : 'Pilot ends'}>{dayText(i.plan === 'paid' ? i.paid_until : i.pilot_ends) || 'No end date'}</Item>
         )}
+        <Item label="Students under 18">{i.minors_consent ? 'Will join, with parents’ consent confirmed' : 'Adults only'}</Item>
         {i.reviewed_at && <Item label="Last reviewed">{dayText(i.reviewed_at)}</Item>}
         {i.review_note && <Item label="Note">{i.review_note}</Item>}
       </dl>
@@ -181,6 +203,9 @@ function InstitutionCard({ i, onAct }: { i: StaffInstitution; onAct: (mode: Mode
             </button>
             <button className="btn btn-ghost btn-sm" onClick={() => onAct('paid')}>
               Move to paid
+            </button>
+            <button className="btn btn-ghost btn-sm" onClick={onInvoices}>
+              Invoices
             </button>
             <button className="btn btn-ghost btn-sm" onClick={() => onAct('suspend')}>
               Suspend

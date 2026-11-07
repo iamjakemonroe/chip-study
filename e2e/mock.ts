@@ -50,6 +50,8 @@ export interface MockOptions {
   /** Chip has no time left today. */
   chipOut?: boolean;
   name?: string;
+  /** The age question's answer: adult unless said (null: not asked yet). */
+  age?: 'adult' | 'guardian' | null;
 }
 
 export class MockBackend {
@@ -61,7 +63,13 @@ export class MockBackend {
   /** Schools, colleges and universities: seed them with inst.seed(), inst.klass() and so on. */
   inst = new MockInstitutions(() => ({ id: this.user.id, name: this.opts.name ?? 'Ada Lovelace', email: this.user.email }));
 
-  constructor(public opts: MockOptions = {}) {}
+  /** One-time sign-in links (token hashes) from a learning platform, still unused. */
+  tokenHashes = new Set<string>();
+
+  constructor(public opts: MockOptions = {}) {
+    const age = opts.age === undefined ? 'adult' : opts.age;
+    if (age) this.inst.age.set(this.user.id, age);
+  }
 
   session() {
     const expires = Math.floor(Date.now() / 1000) + 3600 * 24;
@@ -132,6 +140,10 @@ export class MockBackend {
   private auth(route: Route, what: string, body: Record<string, unknown>) {
     if (what === 'otp') return this.json(route, {});
     if (what === 'verify') {
+      if (body?.token_hash) {
+        if (!this.tokenHashes.delete(String(body.token_hash))) return this.json(route, { code: 403, error_code: 'otp_expired', msg: 'Email link is invalid or has expired' }, 403);
+        return this.json(route, this.session());
+      }
       if (String(body?.token) !== '12345678') return this.json(route, { code: 403, error_code: 'otp_expired', msg: 'Token has expired or is invalid' }, 403);
       return this.json(route, this.session());
     }
@@ -220,16 +232,19 @@ export class MockBackend {
     // Pro paid for on the web has a date it runs to; Pro through an institution doesn't.
     const paid = this.opts.tier === 'pro';
     const pro = paid || this.inst.proFor(this.user.id);
+    // Pro only through an institution: a little less of the best model (inst_* in study_settings).
+    const viaInstitution = !paid && pro;
     const onStudent = pro && this.opts.plan === 'student';
     const out = this.opts.chipOut;
     return {
       tier: pro ? 'pro' : 'free',
+      via_institution: viaInstitution,
       plan: pro ? (onStudent ? 'student' : 'pro') : null,
       name: this.opts.name ?? 'Ada Lovelace',
       pro_until: paid ? new Date(Date.now() + 20 * 86_400_000).toISOString() : null,
       resets_at: new Date(Date.now() + 6 * 3_600_000).toISOString(),
-      fast: { used: out ? 0.03 : this.fastUsed, cap: pro ? 0.06 : 0.03, avg: 0.0012 },
-      best: pro ? { used: this.bestUsed, cap: onStudent ? 0.45 : 0.6, avg: 0.03, period_used: 1.1, period_cap: onStudent ? 3.3 : 4.5 } : null,
+      fast: { used: out ? 0.03 : this.fastUsed, cap: viaInstitution ? 0.04 : pro ? 0.06 : 0.03, avg: 0.0012 },
+      best: pro ? { used: this.bestUsed, cap: viaInstitution ? 0.3 : onStudent ? 0.45 : 0.6, avg: 0.03, period_used: viaInstitution ? 0.2 : 1.1, period_cap: viaInstitution ? 1.5 : onStudent ? 3.3 : 4.5 } : null,
       uploads: { used: 0, cap: pro ? 25 : 3, max_mb: pro ? 20 : 4 },
       readings: { used: 0, cap: pro ? 30 : 3, max_chars: pro ? 400000 : 60000 },
       price: { amount: 7.99, currency: 'USD' },
@@ -273,6 +288,13 @@ export class MockBackend {
       this.inst.forget(this.user.id);
       return this.json(route, null);
     }
+    if (fn === 'study_assignment_set_class') {
+      const a = this.db.study_assignments.find((x) => x.id === args.p_assignment);
+      const inClass = !args.p_class || this.inst.classMembers.some((m) => m.class_id === args.p_class && m.user_id === this.user.id && m.role === 'student');
+      if (!a || !inClass) return this.json(route, { code: 'P0001', message: 'not allowed', details: null, hint: null }, 400);
+      a.class_id = args.p_class ?? null;
+      return this.json(route, null);
+    }
     if (this.inst.handles(fn)) {
       try {
         return this.json(route, this.inst.call(fn, args) ?? null);
@@ -297,6 +319,14 @@ export class MockBackend {
       if (!this.opts.payOn) return this.json(route, { error: 'off' }, 503);
       if (body.plan === 'study.pro.student.monthly' && !this.opts.student) return this.json(route, { error: 'school' }, 400);
       return this.json(route, { link: 'https://checkout.flutterwave.test/pay/abc', ref: 'kaivon-sub-1' });
+    }
+    if (body?.action === 'invoice') {
+      if (!this.opts.payOn) return this.json(route, { error: 'off' }, 503);
+      const r = this.inst.invoiceCheckout(String(body.invoice_id));
+      return this.json(route, r.body, r.status);
+    }
+    if (body?.action === 'confirm' && String(body.ref).startsWith('kaivon-inv-')) {
+      return this.json(route, this.inst.invoicePaid(String(body.ref)) ?? { status: 'unknown' });
     }
     if (body?.action === 'confirm') {
       this.opts.tier = 'pro';
@@ -362,6 +392,10 @@ export class MockBackend {
           { title: 'Write an outline', due: new Date(Date.now() + 2 * 86_400_000).toISOString().slice(0, 10) },
         ],
       });
+    }
+    if (body?.action === 'class_themes') {
+      const r = this.inst.makeThemes(String(body.class_id));
+      return this.json(route, r.body, r.status);
     }
     if (body?.action !== 'chat') return this.json(route, { error: 'Unknown action' }, 400);
     if (this.opts.chipOut) return this.json(route, { error: 'That’s today’s Chip time. It’s back tomorrow.', why: 'limit', resets_at: new Date(Date.now() + 6 * 3_600_000).toISOString(), tier: 'free' }, 429);

@@ -69,6 +69,41 @@ export async function verifyCode(email: string, token: string): Promise<void> {
   }
 }
 
+/** Sign in with Google or Microsoft (Supabase's "azure"), only when VITE_SSO is 1: leaves for the
+ * provider and comes back to /signin, which finishes it (finishOAuth). */
+export const SSO_ON = import.meta.env.VITE_SSO === '1';
+
+export async function signInWith(provider: 'google' | 'azure', next: string): Promise<void> {
+  const { error } = await supabase.auth.signInWithOAuth({
+    provider,
+    options: { redirectTo: `${location.origin}/signin?next=${encodeURIComponent(next)}`, scopes: 'email' },
+  });
+  if (error) throw new Error(friendly(error.message));
+}
+
+/** Back from Google or Microsoft: the session arrives in the address (a code, or tokens in the
+ * fragment, as the client is set up), never to be left there. Answers what went wrong, if
+ * anything; null if there was nothing to finish or it worked. */
+export async function finishOAuth(): Promise<string | null> {
+  const query = new URLSearchParams(location.search);
+  const frag = new URLSearchParams(location.hash.replace(/^#/, ''));
+  const code = query.get('code');
+  const access = frag.get('access_token');
+  const failed = query.get('error_description') ?? frag.get('error_description');
+  if (!code && !access && !failed) return null;
+  query.delete('code');
+  query.delete('error');
+  query.delete('error_code');
+  query.delete('error_description');
+  const rest = query.toString();
+  history.replaceState(history.state, '', `${location.pathname}${rest ? `?${rest}` : ''}`);
+  if (failed) return 'That sign-in didn’t work. Try again, or use your email.';
+  const { error } = code
+    ? await supabase.auth.exchangeCodeForSession(code)
+    : await supabase.auth.setSession({ access_token: access!, refresh_token: frag.get('refresh_token') ?? '' });
+  return error ? 'That sign-in didn’t work. Try again, or use your email.' : null;
+}
+
 function friendly(message: string): string {
   if (/rate limit|security purposes|only request this after/i.test(message)) return 'Hang on a minute before asking for another code.';
   if (/invalid.*email|email.*invalid|unable to validate email/i.test(message)) return 'That email doesn’t look right.';

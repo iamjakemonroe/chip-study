@@ -13,7 +13,7 @@ export function hasSession(): boolean {
   }
 }
 
-/** Only paths inside the app, or an invite link (never another site). */
+/** Only paths inside the app, an invite link, or back to a course's launch (never another site). */
 export function safeNext(next: string | null): string {
-  return next && (next.startsWith('/app') || /^\/join\/[A-Za-z0-9_-]+$/.test(next)) && !next.startsWith('//') ? next : '/app';
+  return next && (next.startsWith('/app') || /^\/join\/[A-Za-z0-9_-]+$/.test(next) || next === '/lti') && !next.startsWith('//') ? next : '/app';
 }

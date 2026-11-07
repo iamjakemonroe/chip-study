@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { Logo } from '../components/Logo.tsx';
+import { GUIDES } from '../content/guides.ts';
 import { site } from '../content/site.ts';
 
 /** Pieces the landing page and the page for institutions share. */
@@ -54,12 +55,13 @@ export function SectionHead({ kicker, title, lead, id }: { kicker: string; title
 export function Footer({ home = '' }: { home?: string }) {
   return (
     <footer className="border-t border-line bg-white/60">
-      <div className="l-wrap grid gap-10 py-14 sm:grid-cols-2 lg:grid-cols-[1.5fr_1fr_1fr_1fr]">
+      <div className="l-wrap grid gap-10 py-14 sm:grid-cols-2 lg:grid-cols-[1.4fr_1fr_1.15fr_1fr_1fr]">
         <div>
           <Logo />
           <p className="mt-4 max-w-xs text-sm leading-relaxed text-ink-3">A calm place to study and really learn, with Chip, a tutor on your side. Made by Kaivon.</p>
         </div>
         <FooterCol title="Chip Study" links={[[`${home}#how`, 'How it works'], [`${home}#pricing`, 'Pricing'], [`${home}#faq`, 'FAQ'], ['/institutions', 'For institutions'], ['/signin', 'Sign in']]} />
+        <FooterCol title="Study guides" links={GUIDES.map((g) => [`/guides/${g.slug}`, g.title.split(':')[0]])} />
         <FooterCol title="Kaivon" links={[[site.kaivon, 'kaivon.app'], [site.utopia, 'Utopia'], [`mailto:${site.email}`, site.email]]} />
         <FooterCol title="Legal" links={[['/terms', 'Terms of Service'], ['/privacy', 'Privacy Policy']]} />
       </div>

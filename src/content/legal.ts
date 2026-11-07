@@ -30,7 +30,8 @@ export const terms: LegalDoc = {
     {
       heading: 'Who can use it',
       body: [
-        'You must be at least 13 years old. If you’re under 18, you need a parent or guardian’s permission, and they agree to these terms for you, including for any payment.',
+        'You must be at least 13 years old. If you’re under 18, you need a parent or guardian’s agreement to use Chip Study, and they agree to these terms for you, including for any payment.',
+        'We ask your age once, after you sign in. Please answer honestly. If you’re under 18, you can join a school, college or university on Chip Study only if it has said students under 18 will join and confirmed it has their parents’ or guardians’ consent.',
       ],
     },
     {
@@ -89,11 +90,25 @@ export const terms: LegalDoc = {
         'An institution (a school, college or university) can register for Chip Study and bring its students in. We check each institution before any students can join.',
         [
           'Joining is your choice. You join by an invite link, a class code or, once we’ve confirmed the institution’s email domain, your school email. Each way tells you what its staff can see before you join.',
-          'While you’re part of an active institution, you get Chip Study Pro at no cost to you. It stops if you leave, if the institution’s pilot or plan ends, or if it’s paused, and your account carries on free (or on Pro you pay for yourself).',
+          'While you’re part of an active institution, you get Chip Study Pro at no cost to you, with a little less of Chip’s best model than personal Pro. It stops if you leave, if the institution’s pilot or plan ends, or if it’s paused, and your account carries on free (or on Pro you pay for yourself, with its own allowance).',
           'Its admins and your teachers can see your activity and each assignment’s AI-use record, never your chats, notes or documents. The Privacy Policy says exactly what.',
           'You can leave at any time in Settings › Your institution. Your work stays yours.',
+          'If your institution connects its learning platform (such as Moodle, Canvas, Blackboard or Brightspace), opening Chip Study from a course can put you in a class for that course. The first time, you’re shown what the institution can see, and you can leave instead.',
+          'If you link an assignment to a class, Chip follows the guidance its lecturer has set for that course, and your questions in it can be part of anonymous themes its teachers see (the Privacy Policy explains).',
         ],
-        'If you run Chip Study for an institution, as an admin or a teacher, use what you see only to support your students, under your institution’s own rules, and keep it confidential. Institutions get a free pilot first; any price after it is agreed with us before anything is charged.',
+        'If you run Chip Study for an institution, as an admin or a teacher, use what you see only to support your students, under your institution’s own rules, and keep it confidential. Institutions get a free one-term pilot first. After it, Chip Study for institutions costs £36 per student per year (or US$45, €42 or ₦45,000), billed yearly by invoice, from 50 students; teachers and admins don’t take seats. Nothing is charged until an institution pays an invoice from us.',
+      ],
+    },
+    {
+      heading: 'Inviting friends',
+      body: [
+        'You can share your invite link. When someone makes a new account with it and asks Chip 3 questions, you each get a week of Chip Study Pro, added after any Pro you already have.',
+        [
+          'The link counts only for a new account, within its first 14 days, and not for your own.',
+          'You can earn up to 12 weeks a year from invites. The friend always gets theirs.',
+          'Don’t make accounts to invite yourself, or pay or pressure people to sign up. We may take back weeks earned that way.',
+          'Campus reps get a named link, and we see how many people joined through it.',
+        ],
       ],
     },
     {
@@ -183,7 +198,16 @@ export const privacy: LegalDoc = {
         'They can’t see:',
         CANT_SEE.you,
         'You can leave at any time in Settings › Your institution. Once you leave, its staff can’t see anything of yours, old or new, and the Chip Study Pro that came from it stops.',
+        'Class themes: if you link an assignment to a class, the questions you ask Chip in it can be part of a short summary of what the class is asking, for the class’s teachers. It’s made from the last 14 days of questions by students in the class, only once 5 or more of them have asked, with no names and no quotes. Your chats are never shown. To make it, those questions are sent to our AI provider; we keep the summary, not a copy of the questions.',
+        'Opening Chip Study from a learning platform: we keep the platform’s ID for you (an ID, not your name), the course’s ID and title, and whether you’re a teacher or a student there. We don’t store the name the platform sends. If it sends an email that isn’t on your institution’s confirmed domain, we keep it for at most an hour, while you sign in to link your accounts.',
         'When an institution registers, we keep what it tells us (its name, country, website, email domain, its contact’s name and role, and the email of whoever registered it) to check it and to run it.',
+      ],
+    },
+    {
+      heading: 'Your age, and invites',
+      body: [
+        'We keep your answer to the age question (18 or over, or under 18 with a parent or guardian’s agreement) and when you answered, to apply the age rule.',
+        'If you join through a friend’s invite link, we keep who invited you, when, and whether your weeks of Pro have been given. The person who invited you sees only how many people joined through their link, not who; you see their name. For campus reps, Kaivon sees their name, email and how many people joined through their link.',
       ],
     },
     {

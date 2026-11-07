@@ -4,6 +4,8 @@ import { Logo } from '../components/Logo.tsx';
 import { Orb } from '../components/Orb.tsx';
 import { CAN_SEE, CANT_SEE } from '../content/institutions.ts';
 import { site } from '../content/site.ts';
+import { useInstitutionPrices } from '../institution/usePrices.ts';
+import { formatPrice, minStudents, priceCurrencies, priceLine, visitorPriceCurrency, type InstitutionPrices } from '../lib/institutionPrice.ts';
 import '../styles/landing.css';
 import { HeroLight } from './HeroLight.tsx';
 import { Arrow, Footer, SectionHead, useSmoothScroll } from './parts.tsx';
@@ -32,6 +34,7 @@ export function Institutions() {
         <What />
         <Privacy />
         <Pilot />
+        <Pricing />
         <Faq />
         <FinalCta />
       </main>
@@ -54,6 +57,7 @@ function Nav() {
     ['#get', 'What you get'],
     ['#privacy', 'Privacy'],
     ['#pilot', 'Pilot'],
+    ['#pricing', 'Pricing'],
     ['#faq', 'FAQ'],
   ];
   return (
@@ -128,7 +132,7 @@ function Hero() {
             </a>
           </div>
           <p className="mt-5 text-sm text-ink-3 l-in" style={{ ['--d' as string]: '0.44s' }}>
-            A free pilot first. Kaivon checks every institution before its students join.
+            A free one-term pilot first. Kaivon checks every institution before its students join.
           </p>
         </div>
       </div>
@@ -328,11 +332,16 @@ function Privacy() {
 }
 
 function Pilot() {
+  const prices = useInstitutionPrices();
+  const line = prices ? priceLine(prices, visitorPriceCurrency()) : null;
   const steps = [
     ['Register', 'Tell us about your institution on a short form. You’ll need a Kaivon account, which is free.'],
     ['We check it', 'Kaivon confirms you’re a real school, college or university, sets your seats and pilot length, and confirms your email domain.'],
     ['Bring students in', 'Make classes, send invite links, or let students join with their school email. Each of them sees what you’ll see first.'],
-    ['Then, a price per student', 'Before the pilot ends we talk about carrying on, at a price per student agreed with you.'],
+    [
+      'Then, one price per student',
+      line ? `${line.replace(/ \(or .*\)$/, '')}, billed yearly by invoice, from ${minStudents(prices!)} students. Kaivon sends the invoice when you’re ready to carry on.` : 'A price per student, billed yearly by invoice. Kaivon sends the invoice when you’re ready to carry on.',
+    ],
   ];
   return (
     <section id="pilot" className="l-section" aria-labelledby="pilot-title">
@@ -347,20 +356,84 @@ function Pilot() {
             </li>
           ))}
         </ol>
-        <div className="l-student r-up mt-8">
-          <span className="grid h-11 w-11 flex-none place-items-center rounded-full bg-mint-soft text-mint" aria-hidden="true">
-            <Sparkles size={20} />
-          </span>
-          <div className="flex-1">
-            <p className="text-lg font-semibold">A free pilot, then a price per student</p>
-            <p className="mt-1 text-[0.9375rem] leading-relaxed text-ink-2">There’s no price list for institutions yet. Ask us about pricing, and we’ll work it out with you.</p>
-          </div>
-          <a href={`mailto:${site.email}?subject=${encodeURIComponent('Chip Study for our institution')}`} className="btn btn-ghost w-full flex-none sm:w-auto">
-            Ask us about pricing
-          </a>
-        </div>
       </div>
     </section>
+  );
+}
+
+/** The price, in the visitor's currency first and the others beside it, with what it covers. */
+function Pricing() {
+  const prices = useInstitutionPrices();
+  const first = visitorPriceCurrency();
+  const order = prices ? priceCurrencies(prices, first) : [];
+  const main = order[0];
+  return (
+    <section id="pricing" className="l-section scroll-mt-20 pt-0 md:pt-0" aria-labelledby="pricing-title">
+      <div className="l-wrap">
+        <SectionHead id="pricing-title" kicker="Pricing" title="One simple price." lead="A free one-term pilot first. After that, one price per student, billed yearly." />
+        <div className="l-price is-glow r-up mx-auto mt-12 max-w-3xl">
+          {prices === undefined ? (
+            <div className="skeleton h-40" />
+          ) : !prices || !main ? (
+            <p className="text-lg leading-relaxed text-ink-2">
+              Write to <a className="font-semibold text-iris" href={`mailto:${site.email}`}>{site.email}</a> for the price.
+            </p>
+          ) : (
+            <div className="grid gap-8 md:grid-cols-[1fr_1.1fr] md:items-center">
+              <div>
+                <p className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                  <span className="text-5xl font-semibold tracking-[-0.035em]">{formatPrice(prices[main]!.per_student_year, main)}</span>
+                  <span className="text-ink-3">per student per year</span>
+                </p>
+                <p className="mt-3 leading-relaxed text-ink-2">
+                  Billed yearly by invoice, from {minStudents(prices)} students, after a free one-term pilot. Teachers and admins don’t take seats.
+                </p>
+                {order.length > 1 && (
+                  <p className="mt-4 flex flex-wrap items-center gap-2 text-sm text-ink-3">
+                    Also
+                    {order.slice(1).map((c) => (
+                      <span key={c} className="rounded-full border border-line bg-white px-2.5 py-0.5 font-semibold text-ink-2">
+                        {formatPrice(prices[c]!.per_student_year, c)}
+                      </span>
+                    ))}
+                  </p>
+                )}
+              </div>
+              <div>
+                <ul className="space-y-3">
+                  {[
+                    'Chip Study Pro for every student, with a little less of Chip’s best model than personal Pro',
+                    'The dashboard, classes, invite links and AI-use records',
+                    'Moodle, Canvas, Blackboard or Brightspace, connected',
+                    'Course tutors for every class',
+                  ].map((t) => (
+                    <li key={t} className="l-tick is-iris">
+                      {t}
+                    </li>
+                  ))}
+                </ul>
+                <a href={REGISTER} className="btn btn-iris mt-7 w-full sm:w-auto">
+                  Start with a free pilot <Arrow />
+                </a>
+              </div>
+            </div>
+          )}
+        </div>
+        <p className="mt-5 text-center text-sm text-ink-3">
+          Questions about the price?{' '}
+          <a className="font-semibold text-iris hover:text-iris-2" href={`mailto:${site.email}?subject=${encodeURIComponent('Chip Study for our institution')}`}>
+            {site.email}
+          </a>
+        </p>
+      </div>
+    </section>
+  );
+}
+
+function faq(prices: InstitutionPrices | null | undefined): string[][] {
+  const line = prices ? priceLine(prices, visitorPriceCurrency()) : null;
+  return FAQ.map(([q, a]) =>
+    q === 'What does it cost?' && line ? [q, `A free one-term pilot first. After that, ${line}, billed yearly by invoice, from ${minStudents(prices!)} students. Teachers and admins don’t take seats.`] : [q, a],
   );
 }
 
@@ -378,7 +451,7 @@ const FAQ = [
     'How do students join?',
     'Three ways: a class code, an invite link sent to their email, or (once we’ve confirmed your email domain) signing in with their school email. Each way shows them what you’ll see first, and joining is their choice.',
   ],
-  ['What does it cost?', `A free pilot first, then a price per student. Ask us about pricing at ${site.email}.`],
+  ['What does it cost?', `A free one-term pilot first, then one price per student, billed yearly by invoice. Write to ${site.email} for it.`],
   ['What happens when the pilot ends?', 'Students keep their accounts and everything they’ve made. The Pro that came with your institution stops until you move to paid seats.'],
   ['Can students leave?', 'Yes, at any time, in Settings. Leaving ends what you can see of them and the Pro that came from you. Their work stays theirs.'],
   ['Which AI is Chip?', 'Chip runs on Claude, made by Anthropic. Anthropic doesn’t use students’ work to train its models, and neither do we.'],
@@ -386,12 +459,13 @@ const FAQ = [
 ];
 
 function Faq() {
+  const prices = useInstitutionPrices();
   return (
     <section id="faq" className="l-section" aria-labelledby="faq-title">
       <div className="l-wrap max-w-3xl">
         <SectionHead id="faq-title" kicker="Questions" title="What institutions ask." />
         <div className="mt-12 space-y-3">
-          {FAQ.map(([q, a]) => (
+          {faq(prices).map(([q, a]) => (
             <details key={q} className="l-faq r-up">
               <summary>
                 <span>{q}</span>
@@ -415,7 +489,7 @@ function FinalCta() {
           <h2 id="cta-title" className="mt-6 text-[2rem] font-semibold leading-tight tracking-[-0.03em] sm:text-[2.75rem]">
             Bring honest AI to your students.
           </h2>
-          <p className="mx-auto mt-3 max-w-xl text-lg leading-relaxed text-ink-2">Register on a short form. We check it, set up a free pilot, and you bring your students in.</p>
+          <p className="mx-auto mt-3 max-w-xl text-lg leading-relaxed text-ink-2">Register on a short form. We check it, set up a free one-term pilot, and you bring your students in.</p>
           <a href={REGISTER} className="btn btn-primary mt-8 h-12 px-7 text-base">
             Register your institution <Arrow />
           </a>

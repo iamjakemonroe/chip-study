@@ -5,7 +5,9 @@ import { site } from '../content/site.ts';
 import { minutesLabel } from '../lib/dates.ts';
 import { dayText, niceTop, weekLabel } from '../lib/institutions.ts';
 import type { InstitutionOverview } from '../lib/types.ts';
+import { minStudents, priceLine, visitorPriceCurrency } from '../lib/institutionPrice.ts';
 import type { InstitutionView } from './InstitutionPage.tsx';
+import { useInstitutionPrices } from './usePrices.ts';
 
 /** This week's numbers for the students this viewer can see, eight weeks of them as bars, where
  * the institution stands (waiting, paused, its pilot) and its seats. */
@@ -159,6 +161,9 @@ function Count({ label, value }: { label: string; value: number }) {
  * approved, paused, its pilot (and when it ends), or a pilot or plan that has ended. */
 function StatusBanner({ ov }: { ov: InstitutionOverview }) {
   const i = ov.institution;
+  const prices = useInstitutionPrices();
+  const line = prices ? priceLine(prices, visitorPriceCurrency())?.replace(/ \(or .*\)$/, '') : null;
+  const price = line ? `${line}, billed yearly by invoice, from ${minStudents(prices!)} students` : 'one price per student, billed yearly by invoice';
   const contact = (
     <a className="font-semibold underline underline-offset-2" href={`mailto:${site.email}`}>
       {site.email}
@@ -200,13 +205,13 @@ function StatusBanner({ ov }: { ov: InstitutionOverview }) {
         <strong className="font-semibold">
           {i.plan === 'paid' ? 'Your plan' : 'The pilot'} ended{ended ? ` on ${dayText(ended)}` : ''}.
         </strong>{' '}
-        Students keep their accounts and work, without Pro. To carry on, ask us about pricing: {contact}.
+        Students keep their accounts and work, without Pro. To carry on, it’s {price}: write to {contact} and Kaivon sends the invoice.
       </>
     );
   } else if (i.plan === 'pilot') {
     body = (
       <>
-        <strong className="font-semibold">Free pilot{i.pilot_ends ? ` until ${dayText(i.pilot_ends)}` : ''}.</strong> Every student here has Chip Study Pro. After the pilot it’s a price per student: ask us about pricing at {contact}.
+        <strong className="font-semibold">Free pilot{i.pilot_ends ? ` until ${dayText(i.pilot_ends)}` : ''}.</strong> Every student here has Chip Study Pro. After the pilot it’s {price}. Kaivon sends the invoice when you’re ready to carry on; questions to {contact}.
       </>
     );
   } else return null;
