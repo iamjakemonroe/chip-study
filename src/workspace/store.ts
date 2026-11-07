@@ -1,7 +1,8 @@
 import type { Editor } from '@tiptap/core';
 import { create } from 'zustand';
 import type { SaveState } from '../lib/autosave.ts';
-import type { Assignment, LogEntry, Message, Mode, Note, Source, StudyDocument, Task, Thread } from '../lib/types.ts';
+import { classTutorGet } from '../lib/api.ts';
+import type { Assignment, ClassTutor, LogEntry, Message, Mode, Note, Source, StudyDocument, Task, Thread } from '../lib/types.ts';
 
 /** One open assignment: its documents, its plan, sources and notes, the record, and the
  * conversation with Chip. */
@@ -42,6 +43,8 @@ interface WorkspaceState {
   chipWords: number;
   panel: Panel | null;
   focusMode: boolean;
+  /** The lecturer's version of Chip, when the assignment is linked to a class. */
+  tutor: ClassTutor | null;
   set: (patch: Partial<WorkspaceState>) => void;
   reset: () => void;
 }
@@ -66,6 +69,7 @@ const empty = {
   chipWords: 0,
   panel: null,
   focusMode: false,
+  tutor: null as ClassTutor | null,
 };
 
 export const useWorkspace = create<WorkspaceState>((set) => ({
@@ -73,6 +77,21 @@ export const useWorkspace = create<WorkspaceState>((set) => ({
   set: (patch) => set(patch),
   reset: () => set(empty),
 }));
+
+/** The course tutor for the class this assignment is linked to (none if it isn't, or if the
+ * student isn't in that class any more). */
+export async function loadTutor(classId: string | null | undefined) {
+  if (!classId) {
+    useWorkspace.setState({ tutor: null });
+    return;
+  }
+  try {
+    const tutor = await classTutorGet(classId);
+    if (useWorkspace.getState().assignment?.class_id === classId) useWorkspace.setState({ tutor });
+  } catch {
+    useWorkspace.setState({ tutor: null });
+  }
+}
 
 let liveDoc: Editor | null = null;
 

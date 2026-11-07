@@ -19,6 +19,7 @@ export interface Inst {
   contact_name: string;
   contact_role: string;
   students_estimate: number | null;
+  minors_consent: boolean;
   status: Status;
   plan: 'pilot' | 'paid';
   seats: number;
@@ -41,6 +42,8 @@ interface Member {
   user_id: string;
   role: Role;
   joined_at: string;
+  /** Seen what the institution can see (null: joined from a learning platform, not yet). */
+  consented: boolean;
 }
 
 interface Klass {
@@ -51,6 +54,45 @@ interface Klass {
   archived: boolean;
   created_at: string;
   help_level: 'guide' | 'explain' | 'hints';
+  course_brief: string;
+  tutor_notes: string;
+}
+
+export interface MockInvoice {
+  id: string;
+  institution_id: string;
+  ref: string;
+  label: string;
+  seats: number;
+  months: number;
+  currency: 'USD' | 'NGN';
+  amount: number;
+  status: 'open' | 'paid' | 'void';
+  created_at: string;
+  paid_at: string | null;
+}
+
+export interface MockPlatform {
+  id: string;
+  institution_id: string;
+  name: string;
+  issuer: string;
+  client_id: string;
+  deployment_id: string;
+  auth_url: string;
+  jwks_url: string;
+  created_at: string;
+  courses: number;
+}
+
+export interface MockPending {
+  token: string;
+  platform_id: string;
+  email: string | null;
+  teacher: boolean;
+  course: string | null;
+  /** Linked already to someone else's account. */
+  owner?: string;
 }
 
 interface Invite {
@@ -89,6 +131,20 @@ export class MockInstitutions {
   invites: Invite[] = [];
   people: Person[] = [];
   staff = new Set<string>();
+  /** Each account's answer to the age question (none: not asked yet). */
+  age = new Map<string, 'adult' | 'guardian'>();
+  invoices: MockInvoice[] = [];
+  platforms: MockPlatform[] = [];
+  pending: MockPending[] = [];
+  /** Each class's themes as last made, and how many of its students asked Chip in 14 days. */
+  themes = new Map<string, { generated_at: string; students: number; questions: number; themes: { title: string; detail: string; questions: number }[] }>();
+  askers = new Map<string, number>();
+  /** Invite codes: whose each is, and who said they came through one. */
+  codes = new Map<string, string>();
+  referrals: { user_id: string; referrer: string; rewarded: boolean; created_at: string }[] = [];
+  reps = new Map<string, { name: string; since: string }>();
+  /** The account is older than 14 days (too late to say who invited it). */
+  oldAccount = false;
 
   constructor(private me: () => Person) {}
 
@@ -108,6 +164,7 @@ export class MockInstitutions {
       contact_name: 'Ada Lovelace',
       contact_role: 'Head of digital learning',
       students_estimate: 1200,
+      minors_consent: false,
       status: 'approved',
       plan: 'pilot',
       seats: 50,
@@ -147,12 +204,12 @@ export class MockInstitutions {
     return p;
   }
 
-  join(institutionId: string, userId: string, role: Role) {
-    this.members.push({ institution_id: institutionId, user_id: userId, role, joined_at: now() });
+  join(institutionId: string, userId: string, role: Role, consented = true) {
+    this.members.push({ institution_id: institutionId, user_id: userId, role, joined_at: now(), consented });
   }
 
   klass(institutionId: string, name: string, code?: string): Klass {
-    const c: Klass = { id: id('3'), institution_id: institutionId, name, code: code ?? this.newCode(), archived: false, created_at: now(), help_level: 'guide' };
+    const c: Klass = { id: id('3'), institution_id: institutionId, name, code: code ?? this.newCode(), archived: false, created_at: now(), help_level: 'guide', course_brief: '', tutor_notes: '' };
     this.classes.push(c);
     return c;
   }
@@ -215,6 +272,7 @@ export class MockInstitutions {
     if (this.roleOf(institutionId, userId)) return;
     const i = this.inst(institutionId);
     if (!this.active(i)) throw new Raise('institution not active');
+    if (this.age.get(userId) === 'guardian' && !i!.minors_consent) throw new Raise('under 18 not allowed here');
     if (this.studentsCount(institutionId) >= i!.seats) throw new Raise('no seats left');
     this.join(institutionId, userId, 'student');
   }
@@ -250,6 +308,65 @@ export class MockInstitutions {
       review_note: i.review_note,
       created_at: i.created_at,
     };
+  }
+
+  /** [user]'s invite code, made the first time. */
+  codeOf(user: string): string {
+    let code = this.codes.get(user);
+    if (!code) {
+      code = Array.from({ length: 8 }, () => LETTERS[Math.floor(Math.random() * LETTERS.length)]).join('');
+      this.codes.set(user, code);
+    }
+    return code;
+  }
+
+  /** An admin of the class's institution, or one of its teachers. */
+  private runs(c: Klass, user: string): boolean {
+    return this.roleOf(c.institution_id, user) === 'admin' || this.classMembers.some((t) => t.class_id === c.id && t.user_id === user && t.role === 'teacher');
+  }
+
+  /** The chip-study function's "class_themes": themes once 5 or more students asked. */
+  makeThemes(classId: string) {
+    const c = this.classes.find((x) => x.id === classId);
+    if (!c || !this.runs(c, this.me().id)) return { status: 403, body: { error: 'Only whoever runs this class can see its themes.' } };
+    const students = this.askers.get(classId) ?? 0;
+    if (students < 5) return { status: 200, body: { enough: false, students } };
+    const saved = {
+      generated_at: now(),
+      students,
+      questions: students * 6,
+      themes: [
+        { title: 'Reading the brief', detail: 'Many students aren’t sure what “critically evaluate” asks of them, and want examples of the difference from describing.', questions: 14 },
+        { title: 'Choosing sources', detail: 'Students ask how many sources are enough and whether textbooks count as academic sources.', questions: 9 },
+        { title: 'The second law', detail: 'Questions show confusion between heat and temperature when applying it.', questions: 7 },
+      ],
+    };
+    this.themes.set(classId, saved);
+    return { status: 200, body: { enough: true, class_id: classId, ...saved } };
+  }
+
+  /** web-pay's "invoice" (the checkout link) and "confirm" for an invoice's reference. */
+  invoiceCheckout(invoiceId: string): { status: number; body: unknown } {
+    const v = this.invoices.find((x) => x.id === invoiceId);
+    if (!v || this.roleOf(v.institution_id, this.me().id) !== 'admin') return { status: 400, body: { error: 'invoice' } };
+    if (v.status !== 'open') return { status: 400, body: { error: 'paid' } };
+    return { status: 200, body: { link: `https://checkout.flutterwave.test/pay/${v.ref}`, ref: v.ref } };
+  }
+
+  invoicePaid(ref: string): { status: 'paid'; product: 'institution'; until: string } | null {
+    const v = this.invoices.find((x) => x.ref === ref);
+    if (!v) return null;
+    const i = this.inst(v.institution_id)!;
+    if (v.status === 'open') {
+      v.status = 'paid';
+      v.paid_at = now();
+      i.plan = 'paid';
+      i.seats = Math.max(i.seats, v.seats);
+      const until = new Date();
+      until.setMonth(until.getMonth() + v.months);
+      i.paid_until = `${until.getFullYear()}-${String(until.getMonth() + 1).padStart(2, '0')}-${String(until.getDate()).padStart(2, '0')}`;
+    }
+    return { status: 'paid', product: 'institution', until: i.paid_until! };
   }
 
   /** Deleting your study data (study_forget_me) also takes you out of the institutions you
@@ -306,6 +423,7 @@ export class MockInstitutions {
           contact_name: String(a.p_contact_name ?? '').trim(),
           contact_role: String(a.p_contact_role ?? '').trim(),
           students_estimate: a.p_students_estimate ?? null,
+          minors_consent: !!a.p_minors_consent,
           status: 'pending',
           seats: 0,
           pilot_ends: null,
@@ -619,7 +737,220 @@ export class MockInstitutions {
       return null;
     },
 
+    // ── 20261107180000_study_growth.sql ──────────────────────────────
+
+    study_age_get: () => this.age.get(this.me().id) ?? null,
+
+    study_age_confirm: (a) => {
+      if (!['adult', 'guardian'].includes(a.p_answer)) throw new Raise('bad answer');
+      this.age.set(this.me().id, a.p_answer);
+      return null;
+    },
+
+    study_my_referral: () => {
+      const me = this.me().id;
+      const code = this.codeOf(me);
+      const mine = this.referrals.filter((r) => r.referrer === me);
+      const by = this.referrals.find((r) => r.user_id === me);
+      return {
+        code,
+        rep: this.reps.get(me)?.name ?? null,
+        invited: mine.length,
+        active: mine.filter((r) => r.rewarded).length,
+        weeks_this_year: Math.min(12, mine.filter((r) => r.rewarded).length),
+        cap: 12,
+        referred_by: by ? this.who(by.referrer).name : null,
+        my_week: by ? (by.rewarded ? 'given' : 'waiting') : null,
+        weeks: Array.from({ length: 8 }, (_, g) => ({ week: day(-6 - 7 * (7 - g)), joined: g === 7 ? mine.length : 0 })),
+      };
+    },
+
+    study_referral_redeem: (a) => {
+      const me = this.me().id;
+      const code = String(a.p_code ?? '').trim().toUpperCase();
+      const owner = [...this.codes.entries()].find(([, c]) => c === code)?.[0];
+      if (!owner) throw new Raise('no such code');
+      if (owner === me) throw new Raise('your own code');
+      if (this.referrals.some((r) => r.user_id === me)) throw new Raise('already referred');
+      if (this.oldAccount) throw new Raise('too late');
+      this.referrals.push({ user_id: me, referrer: owner, rewarded: false, created_at: now() });
+      return { referrer: this.who(owner).name };
+    },
+
+    study_staff_reps: () => {
+      this.staffOrRaise();
+      return [...this.reps.entries()].map(([user, r]) => {
+        const theirs = this.referrals.filter((x) => x.referrer === user);
+        return { user_id: user, name: r.name, code: this.codeOf(user), since: r.since, email: this.who(user).email, signups: theirs.length, signups_7d: theirs.length, signups_30d: theirs.length, active: theirs.filter((x) => x.rewarded).length };
+      });
+    },
+
+    study_staff_set_rep: (a) => {
+      this.staffOrRaise();
+      const who = String(a.p_who ?? '').trim().toLowerCase();
+      const person = [this.me(), ...this.people].find((p) => p.id === a.p_who || p.email.toLowerCase() === who);
+      if (!person) throw new Raise('no such account');
+      const name = String(a.p_name ?? '').trim();
+      if (name) this.reps.set(person.id, { name, since: this.reps.get(person.id)?.since ?? now() });
+      else this.reps.delete(person.id);
+      return { user_id: person.id, code: this.codeOf(person.id) };
+    },
+
+    study_class_tutor_get: (a) => {
+      const c = this.classes.find((x) => x.id === a.p_class);
+      const me = this.me().id;
+      if (!c || !(this.runs(c, me) || this.classMembers.some((m) => m.class_id === c.id && m.user_id === me))) throw new Raise('not allowed');
+      return { id: c.id, name: c.name, institution: this.inst(c.institution_id)!.name, course_brief: c.course_brief, help_level: c.help_level, tutor_notes: c.tutor_notes };
+    },
+
+    study_class_tutor_set: (a) => {
+      const c = this.classes.find((x) => x.id === a.p_class);
+      if (!c || !this.runs(c, this.me().id)) throw new Raise('not allowed');
+      c.course_brief = String(a.p_course_brief ?? '').trim();
+      c.help_level = a.p_help_level ?? c.help_level;
+      c.tutor_notes = String(a.p_tutor_notes ?? '').trim();
+      return null;
+    },
+
+    study_class_themes_get: (a) => {
+      const c = this.classes.find((x) => x.id === a.p_class);
+      if (!c || !this.runs(c, this.me().id)) throw new Raise('not allowed');
+      return this.themes.get(c.id) ?? null;
+    },
+
+    // ── 20261107190000_study_institution_invoices.sql ────────────────
+
+    study_staff_invoice_create: (a) => {
+      this.staffOrRaise();
+      if (this.inst(a.p_inst)?.status !== 'approved') throw new Raise('institution not approved');
+      const v: MockInvoice = {
+        id: id('5'),
+        institution_id: a.p_inst,
+        ref: `kaivon-inv-${id('6').replace(/-/g, '').slice(0, 24)}`,
+        label: String(a.p_label).trim(),
+        seats: a.p_seats,
+        months: a.p_months,
+        currency: String(a.p_currency).toUpperCase() as 'USD' | 'NGN',
+        amount: Math.round(Number(a.p_amount) * 100) / 100,
+        status: 'open',
+        created_at: now(),
+        paid_at: null,
+      };
+      this.invoices.push(v);
+      return v;
+    },
+
+    study_staff_invoice_void: (a) => {
+      this.staffOrRaise();
+      const v = this.invoices.find((x) => x.id === a.p_invoice && x.status === 'open');
+      if (!v) throw new Raise('not open');
+      v.status = 'void';
+      return null;
+    },
+
+    study_institution_invoices: (a) => {
+      if (this.roleOf(a.p_inst, this.me().id) !== 'admin' && !this.staff.has(this.me().id)) throw new Raise('not allowed');
+      return this.invoices
+        .filter((v) => v.institution_id === a.p_inst)
+        .sort((x, y) => y.created_at.localeCompare(x.created_at))
+        .map(({ id: vid, label, seats, months, currency, amount, status, created_at, paid_at }) => ({ id: vid, label, seats, months, currency, amount, status, created_at, paid_at }));
+    },
+
+    // ── 20261107200000_study_lti.sql ─────────────────────────────────
+
+    study_lti_platform_set: (a) => {
+      if (this.roleOf(a.p_inst, this.me().id) !== 'admin' && !this.staff.has(this.me().id)) throw new Raise('not allowed');
+      if (!this.active(this.inst(a.p_inst))) throw new Raise('institution not active');
+      for (const k of ['p_issuer', 'p_auth_url', 'p_jwks_url']) if (!/^https:\/\//.test(String(a[k]))) throw new Raise('new row violates check constraint');
+      const issuer = String(a.p_issuer).trim().replace(/\/+$/, '');
+      const same = this.platforms.find((p) => p.issuer === issuer && p.client_id === a.p_client_id && p.deployment_id === a.p_deployment_id);
+      if (same && same.institution_id !== a.p_inst) throw new Raise('registered to another institution');
+      if (same) Object.assign(same, { name: a.p_name, auth_url: a.p_auth_url, jwks_url: a.p_jwks_url });
+      else this.platforms.push({ id: id('8'), institution_id: a.p_inst, name: String(a.p_name ?? '').trim(), issuer, client_id: a.p_client_id, deployment_id: a.p_deployment_id, auth_url: a.p_auth_url, jwks_url: a.p_jwks_url, created_at: now(), courses: 0 });
+      return (same ?? this.platforms.at(-1)!).id;
+    },
+
+    study_lti_platforms: (a) => {
+      if (this.roleOf(a.p_inst, this.me().id) !== 'admin' && !this.staff.has(this.me().id)) throw new Raise('not allowed');
+      return this.platforms.filter((p) => p.institution_id === a.p_inst).map(({ institution_id: _i, ...p }) => p);
+    },
+
+    study_lti_platform_remove: (a) => {
+      const p = this.platforms.find((x) => x.id === a.p_platform);
+      if (!p || (this.roleOf(p.institution_id, this.me().id) !== 'admin' && !this.staff.has(this.me().id))) throw new Raise('not allowed');
+      this.platforms = this.platforms.filter((x) => x !== p);
+      return null;
+    },
+
+    study_lti_pending_peek: (a) => {
+      const l = this.pending.find((x) => x.token === a.p_token);
+      if (!l) return { found: false };
+      const p = this.platforms.find((x) => x.id === l.platform_id)!;
+      return { found: true, institution: this.inst(p.institution_id)!.name, platform: p.name, course: l.course, email: l.email, teacher: l.teacher };
+    },
+
+    study_lti_link: (a) => {
+      const me = this.me().id;
+      const l = this.pending.find((x) => x.token === a.p_token);
+      if (!l) throw new Raise('link expired');
+      if (l.owner && l.owner !== me) throw new Raise('linked to another account');
+      const p = this.platforms.find((x) => x.id === l.platform_id)!;
+      const instId = p.institution_id;
+      if (!this.active(this.inst(instId))) throw new Raise('institution not active');
+      if (!this.roleOf(instId, me)) {
+        if (l.teacher) this.join(instId, me, 'teacher');
+        else {
+          this.addStudent(instId, me);
+          this.members.find((m) => m.institution_id === instId && m.user_id === me)!.consented = false;
+        }
+      }
+      let classId: string | null = null;
+      if (l.course) {
+        const c = this.classes.find((x) => x.institution_id === instId && x.name === l.course) ?? this.klass(instId, l.course);
+        classId = c.id;
+        if (!this.classMembers.some((m) => m.class_id === c.id && m.user_id === me)) this.inClass(c.id, me, this.roleOf(instId, me) === 'student' ? 'student' : 'teacher');
+        p.courses = new Set([...this.classes.filter((x) => x.institution_id === instId).map((x) => x.id)]).size;
+      }
+      this.pending = this.pending.filter((x) => x !== l);
+      return { institution_id: instId, role: this.roleOf(instId, me), class_id: classId };
+    },
+
+    study_consent_pending: () =>
+      this.members.filter((m) => m.user_id === this.me().id && !m.consented).map((m) => ({ id: m.institution_id, name: this.inst(m.institution_id)!.name })),
+
+    study_consent_accept: (a) => {
+      const m = this.members.find((x) => x.institution_id === a.p_inst && x.user_id === this.me().id);
+      if (m) m.consented = true;
+      return null;
+    },
+
+    // ── 20261107220000_study_class_new_code.sql, 20261107235000_study_minors.sql ──
+
+    study_class_new_code: (a) => {
+      const c = this.classes.find((x) => x.id === a.p_class);
+      if (!c || !this.runs(c, this.me().id)) throw new Raise('not allowed');
+      c.code = this.newCode();
+      return c.code;
+    },
+
+    study_institution_minors: (a) => {
+      if (this.roleOf(a.p_inst, this.me().id) !== 'admin') throw new Raise('not allowed');
+      const i = this.inst(a.p_inst)!;
+      if (!a.p_minors_consent && i.kind === 'school') throw new Raise('schools need it');
+      i.minors_consent = !!a.p_minors_consent;
+      return null;
+    },
+
     study_am_staff: () => this.staff.has(this.me().id),
+
+    // ── 20261108010000_study_institution_price.sql ───────────────────
+
+    study_institution_prices: () => ({
+      GBP: { per_student_year: 36, min_students: 50 },
+      USD: { per_student_year: 45, min_students: 50 },
+      EUR: { per_student_year: 42, min_students: 50 },
+      NGN: { per_student_year: 45000, min_students: 50 },
+    }),
 
     study_staff_institutions: (a) => {
       this.staffOrRaise();
@@ -632,6 +963,7 @@ export class MockInstitutions {
           students_estimate: i.students_estimate,
           students: this.studentsCount(i.id),
           reviewed_at: i.reviewed_at,
+          minors_consent: i.minors_consent,
         }));
     },
 

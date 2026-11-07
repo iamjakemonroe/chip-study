@@ -243,12 +243,16 @@ export const TONE_CLASS: Record<StatusTone, string> = {
   off: 'bg-rose-soft text-[#b8355a]',
 };
 
-/** The active institution giving this account Pro, when Pro comes from one and not from a plan
- * paid on the web (tier pro, with no paid-until date). */
-export function proThrough(me: Pick<Me, 'tier' | 'pro_until'> | null | undefined, mine: MyInstitution[] | null | undefined): MyInstitution | null {
-  if (!me || me.tier !== 'pro' || me.pro_until || !mine) return null;
+/** The active institution giving this account Pro, when Pro comes only from one: the server says
+ * so (via_institution); a server older than that is read as tier pro with no paid-until date. */
+export function proThrough(me: Pick<Me, 'tier' | 'pro_until' | 'via_institution'> | null | undefined, mine: MyInstitution[] | null | undefined): MyInstitution | null {
+  if (!me || me.tier !== 'pro' || !mine) return null;
+  if (me.via_institution === false || (me.via_institution === undefined && me.pro_until)) return null;
   return mine.find((m) => m.active) ?? null;
 }
+
+/** How Pro through an institution differs from Pro of your own, said the same way everywhere. */
+export const VIA_INSTITUTION_NOTE = 'with a little less of Chip’s best model than personal Pro';
 
 // ── Errors ────────────────────────────────────────────────────────────
 
@@ -269,6 +273,15 @@ const ERRORS: [RegExp, string][] = [
   [/public email domain/, 'That’s a public email domain, like gmail.com. Use the institution’s own domain.'],
   [/study_institutions_domain|duplicate key/, 'Another institution already uses that email domain.'],
   [/no such class/, 'No class has that code. Check it with your teacher.'],
+  [/under 18 not allowed here/, 'This institution hasn’t said students under 18 will join, so you can’t join it yet. Ask your teacher or its admins about it.'],
+  [/schools need it/, 'A school always has students under 18, so this stays on.'],
+  [/link expired/, 'That sign-in link has run out. Open Chip Study from your course again.'],
+  [/linked to another account/, 'Your course account is already linked to a different Chip Study account. Sign in with that one.'],
+  [/registered to another institution/, 'That platform is already connected to another institution. Write to support@kaivon.app.'],
+  [/institution not approved/, 'Invoices are for approved institutions.'],
+  [/not open/, 'That invoice is already paid or cancelled.'],
+  [/no such account/, 'No account has that email, username or ID.'],
+  [/no such code|your own code|already referred|too late/, 'That invite code can’t be used.'],
   [/no such institution/, 'That institution isn’t there any more.'],
   [/not a member/, 'They’re not part of this institution any more.'],
   [/not allowed/, 'You can’t do that here. An admin of the institution can.'],

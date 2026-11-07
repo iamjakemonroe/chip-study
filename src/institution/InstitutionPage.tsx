@@ -1,11 +1,12 @@
 import { ArrowLeft, Building2 } from 'lucide-react';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router';
 import { ChipLoader } from '../components/ChipLoader.tsx';
 import { Orb } from '../components/Orb.tsx';
 import { TopBar } from '../components/TopBar.tsx';
-import { ApiError, institutionOverview, listClasses, notAllowed } from '../lib/api.ts';
-import { countryName, institutionStatus, KIND_LABEL, ROLE_LABEL, TONE_CLASS } from '../lib/institutions.ts';
+import { ApiError, confirmPayment, institutionOverview, listClasses, notAllowed } from '../lib/api.ts';
+import { countryName, dayText, institutionStatus, KIND_LABEL, ROLE_LABEL, TONE_CLASS } from '../lib/institutions.ts';
+import { toast } from '../store/toast.ts';
 import type { InstitutionOverview, StudyClass } from '../lib/types.ts';
 import { ClassesTab } from './ClassesTab.tsx';
 import { InviteTab } from './InviteTab.tsx';
@@ -71,6 +72,27 @@ export function InstitutionPage() {
   useEffect(() => {
     if (ov) document.title = `${ov.institution.name} · Chip Study`;
   }, [ov]);
+
+  // Back from paying an invoice: ?invoice=1&status=…&tx_ref=…&transaction_id=… (Flutterwave's).
+  const confirmed = useRef(false);
+  useEffect(() => {
+    const ref = params.get('tx_ref');
+    if (params.get('invoice') !== '1' || !ref || confirmed.current) return;
+    confirmed.current = true;
+    const status = params.get('status');
+    const tx = params.get('transaction_id') ?? '';
+    setParams({ tab: 'settings' }, { replace: true });
+    if (status !== 'successful' && status !== 'completed') {
+      toast('The payment didn’t go through. Nothing was charged.', 'warn');
+      return;
+    }
+    void confirmPayment(ref, tx).then(async (r) => {
+      if (r.status === 'paid') {
+        await reload();
+        toast(r.until ? `Paid, thank you. Your seats run until ${dayText(r.until)}.` : 'Paid, thank you.', 'good');
+      } else toast('We’re still confirming your payment. It can take a minute.', 'info');
+    });
+  }, [params, setParams, reload]);
 
   const go = useCallback(
     (next: Tab, classId?: string) => {

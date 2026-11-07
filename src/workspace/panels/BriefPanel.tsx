@@ -1,11 +1,11 @@
-import { Brain, ClipboardCheck, Lightbulb } from 'lucide-react';
+import { Brain, ClipboardCheck, GraduationCap, Lightbulb } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import { updateAssignment } from '../../lib/api.ts';
+import { myClasses, setAssignmentClass, updateAssignment } from '../../lib/api.ts';
 import { COLOR_ORDER, COLORS } from '../../lib/colors.ts';
 import { dueAtFrom, toDay } from '../../lib/dates.ts';
-import type { Assignment } from '../../lib/types.ts';
+import type { Assignment, MyClass } from '../../lib/types.ts';
 import { toast } from '../../store/toast.ts';
-import { useWorkspace } from '../store.ts';
+import { loadTutor, useWorkspace } from '../store.ts';
 
 const time = (iso: string | null) => {
   if (!iso) return '23:59';
@@ -104,6 +104,7 @@ export function BriefPanel({ onAsk }: { onAsk: (mode: 'explain' | 'check' | 'qui
           <input id="b-time" type="time" className="field" value={draft.time} onChange={(e) => setDraft({ ...draft, time: e.target.value })} onBlur={() => void save({ due_at: dueAtFrom(draft.day, draft.time) })} />
         </div>
       </div>
+      <ClassLink />
       <div className="mt-3 flex items-center gap-2">
         <span className="label mb-0 mr-1">Colour</span>
         {COLOR_ORDER.map((c) => (
@@ -137,6 +138,64 @@ export function BriefPanel({ onAsk }: { onAsk: (mode: 'explain' | 'check' | 'qui
           <textarea id="b-rubric" className="field min-h-36 resize-y text-[0.9375rem] leading-relaxed" value={draft.rubric} placeholder="How it’s marked. Chip checks your work against it." onChange={(e) => setDraft({ ...draft, rubric: e.target.value })} onBlur={() => void save({ rubric: draft.rubric })} />
         </>
       )}
+    </div>
+  );
+}
+
+/** Links the assignment to one of your classes, so Chip follows that course's lecturer. Only shows
+ * for someone in a class (or an assignment already linked to one). */
+function ClassLink() {
+  const a = useWorkspace((s) => s.assignment)!;
+  const tutor = useWorkspace((s) => s.tutor);
+  const [classes, setClasses] = useState<MyClass[] | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    myClasses()
+      .then(setClasses)
+      .catch(() => setClasses([]));
+  }, []);
+  useEffect(() => {
+    if (a.class_id && !useWorkspace.getState().tutor) void loadTutor(a.class_id);
+  }, [a.class_id]);
+
+  if (!classes || (classes.length === 0 && !a.class_id)) return null;
+
+  const link = async (classId: string | null) => {
+    const before = a.class_id ?? null;
+    setBusy(true);
+    useWorkspace.setState({ assignment: { ...a, class_id: classId } });
+    try {
+      await setAssignmentClass(a.id, classId);
+      await loadTutor(classId);
+      const name = classes.find((c) => c.id === classId)?.name;
+      toast(classId ? `Linked to ${name ?? 'your class'}. Chip follows your lecturer’s guidance for it.` : 'Unlinked.', 'good');
+    } catch (e) {
+      useWorkspace.setState({ assignment: { ...useWorkspace.getState().assignment!, class_id: before } });
+      toast((e as Error).message, 'warn');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="mt-3">
+      <label className="label" htmlFor="b-class">
+        Class
+      </label>
+      <select id="b-class" className="field" value={a.class_id ?? ''} disabled={busy} onChange={(e) => void link(e.target.value || null)}>
+        <option value="">Not linked to a class</option>
+        {classes.map((c) => (
+          <option key={c.id} value={c.id}>
+            {c.name} · {c.institution}
+          </option>
+        ))}
+        {a.class_id && !classes.some((c) => c.id === a.class_id) && <option value={a.class_id}>A class you’ve left</option>}
+      </select>
+      <p className="mt-1.5 flex gap-1.5 text-xs leading-relaxed text-ink-3">
+        <GraduationCap size={14} className="mt-px flex-none" />
+        {tutor ? `Chip follows your lecturer’s guidance for ${tutor.name}.` : 'Link it to a class and Chip follows that course’s lecturer: how much to help, and in the course’s own terms.'}
+      </p>
     </div>
   );
 }

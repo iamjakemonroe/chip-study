@@ -17,6 +17,11 @@ export const CURRENCY: Currency = inNigeria() ? 'NGN' : 'USD';
 /** A dollar price in this buyer's currency, before the server says. */
 export const fromUsd = (usd: number) => (CURRENCY === 'NGN' ? Math.round(usd * 1000) : usd);
 
+/** The line under prices, in the currency they're shown in. */
+export function priceNote(currency: Currency = CURRENCY): string {
+  return currency === 'NGN' ? 'Prices in naira. Payments by Flutterwave.' : 'Prices in US dollars. Your card’s bank converts if it’s in another currency. Payments by Flutterwave.';
+}
+
 /** "$7.99" or "₦7,990". */
 export function money(amount: number, currency: Currency = CURRENCY): string {
   return currency === 'NGN' ? `₦${Math.round(amount).toLocaleString('en-NG')}` : `$${amount.toFixed(2)}`;

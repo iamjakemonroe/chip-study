@@ -9,6 +9,7 @@ import { TopBar } from '../components/TopBar.tsx';
 import { Confirm, Menu, MenuItem, Ring } from '../components/ui.tsx';
 import { JoinClassModal } from '../institution/JoinClass.tsx';
 import { SchoolCard } from '../institution/SchoolCard.tsx';
+import { ReferralStrip } from '../components/Referral.tsx';
 import { chipTime, describe } from '../lib/allowance.ts';
 import { deleteAssignment, listAssignments, listDueCards, listFocusSince, listPracticeSince, listTasks, updateAssignment, updateTask } from '../lib/api.ts';
 import { COLORS, TONE_STYLES } from '../lib/colors.ts';
@@ -190,6 +191,7 @@ export function Dashboard() {
         </div>
 
         <SchoolCard />
+        <ReferralStrip />
         {running.length > 0 && (
           <motion.section {...appear(5)} className="mt-4 flex flex-wrap gap-2" aria-label="Your institutions">
             {running.map((m) => (

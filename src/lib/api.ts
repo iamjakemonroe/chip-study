@@ -1,6 +1,7 @@
 import { supabase } from './supabase.ts';
 import { CURRENCY } from './currency.ts';
 import { institutionError } from './institutions.ts';
+import type { InstitutionPrices } from './institutionPrice.ts';
 import type {
   Assignment,
   Card,
@@ -17,8 +18,16 @@ import type {
   LogEntry,
   Me,
   Message,
+  AgeAnswer,
   ClassPeek,
+  ClassThemes,
+  ClassTutor,
+  HelpLevel,
+  Invoice,
+  LtiPending,
+  LtiPlatform,
   MyClass,
+  MyReferral,
   MyInstitution,
   Note,
   OpenInvite,
@@ -27,6 +36,7 @@ import type {
   SourceData,
   SourceKind,
   StaffInstitution,
+  StaffRep,
   StudentDetail,
   StudyClass,
   StudyDocument,
@@ -600,4 +610,159 @@ export async function staffReview(id: string, r: Review): Promise<void> {
     }),
     'Couldn’t save that review just now.',
   );
+}
+
+// ── The age rule ──────────────────────────────────────────────────────
+
+/** What this account said about its age, or null if it hasn't been asked. */
+export async function ageGet(): Promise<AgeAnswer | null> {
+  return inst<AgeAnswer | null>(await supabase.rpc('study_age_get'), 'Couldn’t load your account just now.') ?? null;
+}
+
+export async function ageConfirm(answer: AgeAnswer): Promise<void> {
+  inst(await supabase.rpc('study_age_confirm', { p_answer: answer }), 'Couldn’t save that just now. Try again.');
+}
+
+/** An admin says whether students under 18 will join (with their parents' or guardians' consent). */
+export async function setInstitutionMinors(id: string, minors: boolean): Promise<void> {
+  inst(await supabase.rpc('study_institution_minors', { p_inst: id, p_minors_consent: minors }), 'Couldn’t save that just now.');
+}
+
+// ── Invite a friend, and campus reps ──────────────────────────────────
+
+export async function myReferral(): Promise<MyReferral> {
+  return inst<MyReferral>(await supabase.rpc('study_my_referral'), 'Couldn’t load your invite link just now.');
+}
+
+/** Says who brought this new account; answers the friend's name. */
+export async function redeemReferral(code: string): Promise<{ referrer: string }> {
+  return inst(await supabase.rpc('study_referral_redeem', { p_code: code }), 'Couldn’t use that invite code just now.');
+}
+
+export async function staffReps(): Promise<StaffRep[]> {
+  return inst<StaffRep[] | null>(await supabase.rpc('study_staff_reps'), 'Couldn’t load the campus reps just now.') ?? [];
+}
+
+/** Makes someone a campus rep (by email, username or ID), or stops it (an empty name). */
+export async function staffSetRep(who: string, name: string): Promise<{ user_id: string; code: string }> {
+  return inst(await supabase.rpc('study_staff_set_rep', { p_who: who, p_name: name }), 'Couldn’t save that rep just now.');
+}
+
+// ── Course tutors and class themes ────────────────────────────────────
+
+export async function classTutorGet(classId: string): Promise<ClassTutor> {
+  return inst<ClassTutor>(await supabase.rpc('study_class_tutor_get', { p_class: classId }), 'Couldn’t load the course tutor just now.');
+}
+
+export async function classTutorSet(classId: string, t: { course_brief: string; help_level: HelpLevel; tutor_notes: string }): Promise<void> {
+  inst(
+    await supabase.rpc('study_class_tutor_set', { p_class: classId, p_course_brief: t.course_brief, p_help_level: t.help_level, p_tutor_notes: t.tutor_notes }),
+    'Couldn’t save the course tutor just now.',
+  );
+}
+
+/** Links your assignment to a class you study in, or unlinks it (null). */
+export async function setAssignmentClass(assignmentId: string, classId: string | null): Promise<void> {
+  inst(await supabase.rpc('study_assignment_set_class', { p_assignment: assignmentId, p_class: classId }), 'Couldn’t link that just now.');
+}
+
+/** The class's themes as last made, or null if they never have been. */
+export async function classThemesGet(classId: string): Promise<ClassThemes | null> {
+  return inst<ClassThemes | null>(await supabase.rpc('study_class_themes_get', { p_class: classId }), 'Couldn’t load the class’s themes just now.') ?? null;
+}
+
+/** A class gets a new code (the old one stops working); answers it. */
+export async function classNewCode(classId: string): Promise<string> {
+  return inst<string>(await supabase.rpc('study_class_new_code', { p_class: classId }), 'Couldn’t make a new code just now.');
+}
+
+// ── Invoices ──────────────────────────────────────────────────────────
+
+export async function institutionInvoices(id: string): Promise<Invoice[]> {
+  const rows = inst<Invoice[] | null>(await supabase.rpc('study_institution_invoices', { p_inst: id }), 'Couldn’t load the invoices just now.') ?? [];
+  return rows.map((r) => ({ ...r, amount: Number(r.amount) }));
+}
+
+export async function staffInvoiceCreate(id: string, f: { label: string; seats: number; months: number; currency: 'USD' | 'NGN'; amount: number }): Promise<Invoice> {
+  return inst(
+    await supabase.rpc('study_staff_invoice_create', { p_inst: id, p_label: f.label, p_seats: f.seats, p_months: f.months, p_currency: f.currency, p_amount: f.amount }),
+    'Couldn’t make that invoice just now.',
+  );
+}
+
+export async function staffInvoiceVoid(invoiceId: string): Promise<void> {
+  inst(await supabase.rpc('study_staff_invoice_void', { p_invoice: invoiceId }), 'Couldn’t cancel that invoice just now.');
+}
+
+/** Starts paying an invoice (an admin of its institution): answers the checkout link. */
+export async function payInvoice(invoiceId: string): Promise<string> {
+  const { data, error } = await supabase.functions.invoke('web-pay', { body: { action: 'invoice', invoice_id: invoiceId } });
+  const link = (data as { link?: string } | null)?.link;
+  if (error || !link || !link.startsWith('https://')) {
+    let why = '';
+    try {
+      why = (await (error as { context?: Response })?.context?.json())?.error ?? '';
+    } catch {
+      // No reason given.
+    }
+    throw new ApiError(
+      why === 'paid' ? 'That invoice is already paid or cancelled.' : why === 'off' ? 'Payments aren’t open yet. Write to support@kaivon.app.' : why === 'account' ? 'Your account needs an email to pay.' : 'Couldn’t start the payment. Try again.',
+      why,
+    );
+  }
+  return link;
+}
+
+// ── Learning platforms (LTI 1.3) ──────────────────────────────────────
+
+export async function ltiPlatforms(id: string): Promise<LtiPlatform[]> {
+  return inst<LtiPlatform[] | null>(await supabase.rpc('study_lti_platforms', { p_inst: id }), 'Couldn’t load your learning platforms just now.') ?? [];
+}
+
+export async function ltiPlatformSet(
+  id: string,
+  p: { name: string; issuer: string; client_id: string; deployment_id: string; auth_url: string; jwks_url: string },
+): Promise<string> {
+  return inst<string>(
+    await supabase.rpc('study_lti_platform_set', {
+      p_inst: id,
+      p_name: p.name,
+      p_issuer: p.issuer,
+      p_client_id: p.client_id,
+      p_deployment_id: p.deployment_id,
+      p_auth_url: p.auth_url,
+      p_jwks_url: p.jwks_url,
+    }),
+    'Couldn’t save that platform just now.',
+  );
+}
+
+export async function ltiPlatformRemove(platformId: string): Promise<void> {
+  inst(await supabase.rpc('study_lti_platform_remove', { p_platform: platformId }), 'Couldn’t remove that platform just now.');
+}
+
+/** What a launch waiting to be linked is for (works before signing in). */
+export async function ltiPendingPeek(token: string): Promise<LtiPending> {
+  return inst<LtiPending>(await supabase.rpc('study_lti_pending_peek', { p_token: token }), 'Couldn’t open that just now.') ?? { found: false };
+}
+
+/** Links a waiting launch to the signed-in account, and joins its institution and class. */
+export async function ltiLink(token: string): Promise<{ institution_id: string; role: InstitutionRole; class_id: string | null }> {
+  return inst(await supabase.rpc('study_lti_link', { p_token: token }), 'Couldn’t link your course just now.');
+}
+
+/** Institutions whose privacy terms you haven't seen yet (joined from a learning platform). */
+export async function consentPending(): Promise<{ id: string; name: string }[]> {
+  return inst<{ id: string; name: string }[] | null>(await supabase.rpc('study_consent_pending'), 'Couldn’t load that just now.') ?? [];
+}
+
+export async function consentAccept(id: string): Promise<void> {
+  inst(await supabase.rpc('study_consent_accept', { p_inst: id }), 'Couldn’t save that just now.');
+}
+
+// ── The price for institutions ────────────────────────────────────────
+
+/** Per student per year in each currency, and the fewest students it's for (anyone may ask). */
+export async function institutionPrices(): Promise<InstitutionPrices> {
+  return inst<InstitutionPrices | null>(await supabase.rpc('study_institution_prices'), 'Couldn’t load the price just now.') ?? {};
 }

@@ -116,3 +116,22 @@ export async function readSheet(sheet: { text?: string; files?: SheetFile[] }): 
   }
   return body;
 }
+
+/** What a class is asking Chip about, made into themes now (the chip-study function, "class_themes"):
+ * only for whoever runs the class, and only once 5 or more of its students asked in the last 14
+ * days. It uses the teacher's own Chip time. */
+export async function makeClassThemes(classId: string): Promise<
+  { enough: false; students: number } | { enough: true; generated_at: string; students: number; questions: number; themes: { title: string; detail: string; questions: number }[] }
+> {
+  const res = await fetch(`${SUPABASE_URL}/functions/v1/chip-study`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${await token()}`, apikey: SUPABASE_KEY, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action: 'class_themes', class_id: classId }),
+  });
+  const body = (await res.json().catch(() => ({}))) as Record<string, unknown> & { error?: string; why?: string; resets_at?: string };
+  if (!res.ok) {
+    if (body.why) throw new ChipRefused(body.error ?? 'Chip can’t do that just now.', body.why, body.resets_at ?? null);
+    throw new Error(body.error ?? 'Chip couldn’t look at the class just now. Try again.');
+  }
+  return body as never;
+}

@@ -4,6 +4,7 @@ import { Modal, Spinner } from '../components/ui.tsx';
 import { joinClass, peekClass } from '../lib/api.ts';
 import { isClassCode, normalizeClassCode } from '../lib/institutions.ts';
 import type { ClassPeek } from '../lib/types.ts';
+import { useAge } from '../store/age.ts';
 import { useAuth } from '../store/auth.ts';
 import { useInstitutions } from '../store/institutions.ts';
 import { toast } from '../store/toast.ts';
@@ -55,8 +56,9 @@ export function JoinClassModal({ open, onClose }: { open: boolean; onClose: () =
   };
 
   const join = async () => {
-    setBusy(true);
     setError('');
+    if (!(await useAge.getState().ensure())) return;
+    setBusy(true);
     try {
       const r = await joinClass(clean);
       await Promise.all([useAuth.getState().refresh(), useInstitutions.getState().load(true)]);

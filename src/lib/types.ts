@@ -21,6 +21,8 @@ export interface Assignment {
   kind: 'topic' | 'assignment';
   words: number;
   focus_minutes: number;
+  /** The class it's linked to, for its lecturer's version of Chip (study_assignment_set_class). */
+  class_id?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -176,6 +178,8 @@ export interface Me {
   /** Which Pro: full Pro, or the student plan (Pro at the student price). Null without Pro.
    * This and the student fields are missing from a server older than the student plan. */
   plan?: 'pro' | 'student' | null;
+  /** Pro only through an institution (no plan of its own): a little less of Chip's best model. */
+  via_institution?: boolean;
   name: string | null;
   pro_until: string | null;
   resets_at: string;
@@ -244,6 +248,8 @@ export interface InstitutionDetails {
   contact_role: string;
   review_note: string;
   created_at: string;
+  /** Not in study_institution_overview yet: read it when the server sends it. */
+  minors_consent?: boolean;
 }
 
 export interface InstitutionOverview {
@@ -336,6 +342,8 @@ export interface StaffInstitution {
   review_note: string;
   created_at: string;
   reviewed_at: string | null;
+  /** It said students under 18 will join, with their parents' or guardians' consent. */
+  minors_consent?: boolean;
 }
 
 /** What a class code is, before joining (study_class_peek). */
@@ -366,4 +374,85 @@ export interface MyClass {
   name: string;
   institution: string;
   help_level: 'guide' | 'explain' | 'hints';
+}
+
+// ── The age rule, referrals, course tutors, class themes, invoices, platforms ──
+
+/** 'adult': 18 or over. 'guardian': under 18, with a parent or guardian's agreement. */
+export type AgeAnswer = 'adult' | 'guardian';
+
+export interface MyReferral {
+  code: string;
+  rep: string | null;
+  invited: number;
+  /** Friends who've really used it (asked Chip 3 times): both got a week. */
+  active: number;
+  weeks_this_year: number;
+  cap: number;
+  referred_by: string | null;
+  my_week: 'given' | 'waiting' | null;
+  weeks: { week: string; joined: number }[];
+}
+
+export interface StaffRep {
+  user_id: string;
+  name: string;
+  code: string;
+  since: string | null;
+  email: string | null;
+  signups: number;
+  signups_7d: number;
+  signups_30d: number;
+  active: number;
+}
+
+export type HelpLevel = 'guide' | 'explain' | 'hints';
+
+export interface ClassTutor {
+  id: string;
+  name: string;
+  institution: string;
+  course_brief: string;
+  help_level: HelpLevel;
+  tutor_notes: string;
+}
+
+export interface ClassThemes {
+  generated_at: string;
+  students: number;
+  questions: number;
+  themes: { title: string; detail: string; questions: number }[];
+}
+
+export interface Invoice {
+  id: string;
+  label: string;
+  seats: number;
+  months: number;
+  currency: 'USD' | 'NGN';
+  amount: number;
+  status: 'open' | 'paid' | 'void';
+  created_at: string;
+  paid_at: string | null;
+}
+
+export interface LtiPlatform {
+  id: string;
+  name: string;
+  issuer: string;
+  client_id: string;
+  deployment_id: string;
+  auth_url: string;
+  jwks_url: string;
+  created_at: string;
+  courses: number;
+}
+
+export interface LtiPending {
+  found: boolean;
+  institution?: string;
+  platform?: string;
+  course?: string | null;
+  email?: string | null;
+  teacher?: boolean;
 }

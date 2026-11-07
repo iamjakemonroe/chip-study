@@ -8,6 +8,7 @@ import { cleanDomain, cleanWebsite, countryName, dayText, institutionStatus, isD
 import { useAuth } from '../store/auth.ts';
 import { useInstitutions } from '../store/institutions.ts';
 import { toast } from '../store/toast.ts';
+import { InvoicesSetting, MinorsSetting, PlatformsSetting } from './AdminSettings.tsx';
 import type { InstitutionView } from './InstitutionPage.tsx';
 
 /** The institution's details (admins edit them), whether its email domain is confirmed, its plan,
@@ -66,7 +67,7 @@ export function SettingsTab({ view }: { view: InstitutionView }) {
 
   return (
     <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
-      <section className="card p-5 sm:p-6" aria-labelledby="details-title">
+      <section className="card self-start p-5 sm:p-6" aria-labelledby="details-title">
         <h2 id="details-title" className="font-semibold">
           Details
         </h2>
@@ -150,12 +151,15 @@ export function SettingsTab({ view }: { view: InstitutionView }) {
             {i.plan === 'pilot' && i.pilot_ends && <Row label="Pilot ends" value={dayText(i.pilot_ends)} />}
           </dl>
           <p className="mt-4 text-sm leading-relaxed text-ink-3">
-            More seats, or ready to carry on after the pilot? Ask us about pricing:{' '}
+            More seats, or ready to carry on after the pilot? Write to us and Kaivon sends an invoice:{' '}
             <a className="font-semibold text-iris hover:text-iris-2" href={`mailto:${site.email}`}>
               {site.email}
             </a>
           </p>
         </section>
+
+        {admin && <MinorsSetting inst={i} />}
+        {admin && <InvoicesSetting inst={i} reloadKey={`${i.plan}:${i.paid_until ?? ''}`} />}
 
         <section className="card p-5 sm:p-6" aria-labelledby="leave-title">
           <h2 id="leave-title" className="font-semibold">
@@ -169,6 +173,12 @@ export function SettingsTab({ view }: { view: InstitutionView }) {
           </button>
         </section>
       </div>
+
+      {admin && (
+        <div className="lg:col-span-2">
+          <PlatformsSetting inst={i} />
+        </div>
+      )}
 
       <Confirm
         open={leaving}

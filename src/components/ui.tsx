@@ -1,6 +1,6 @@
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { X } from 'lucide-react';
-import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { useToasts } from '../store/toast.ts';
 
@@ -172,6 +172,7 @@ export function Menu({
   const [at, setAt] = useState<{ top?: number; bottom?: number; left?: number; right?: number } | null>(null);
   const trigger = useRef<HTMLButtonElement>(null);
   const list = useRef<HTMLDivElement>(null);
+  const fitted = useRef(false);
 
   const place = () => {
     const r = trigger.current?.getBoundingClientRect();
@@ -181,6 +182,30 @@ export function Menu({
     if (align === 'right') setAt({ ...y, right: Math.max(8, window.innerWidth - r.right) });
     else setAt({ ...y, left: Math.min(Math.max(8, r.left), window.innerWidth - 220) });
   };
+
+  // A long menu that wouldn't fit below its button opens above it, or moves up to stay on screen.
+  useLayoutEffect(() => {
+    if (!open) {
+      // Placed afresh next time, never from where it was last.
+      fitted.current = false;
+      if (at) setAt(null);
+      return;
+    }
+    const el = list.current;
+    const r = trigger.current?.getBoundingClientRect();
+    if (!el || !r || !at || fitted.current) return;
+    fitted.current = true;
+    const h = el.offsetHeight;
+    const below = window.innerHeight - r.bottom - 6;
+    const above = r.top - 6;
+    if (at.top !== undefined && h > below - 8) {
+      if (above >= h + 8) setAt({ ...at, top: undefined, bottom: window.innerHeight - r.top + 6 });
+      else setAt({ ...at, top: Math.max(8, window.innerHeight - h - 8) });
+    } else if (at.bottom !== undefined && h > above - 8) {
+      if (below >= h + 8) setAt({ ...at, bottom: undefined, top: r.bottom + 6 });
+      else setAt({ ...at, bottom: undefined, top: 8 });
+    }
+  }, [open, at]);
 
   useEffect(() => {
     if (!open) return;
@@ -213,7 +238,7 @@ export function Menu({
             <motion.div
               ref={list}
               role="menu"
-              className="fixed z-[95] min-w-[13rem] max-w-[calc(100vw-16px)] rounded-2xl border border-line bg-white p-1.5 shadow-[var(--shadow-lift)]"
+              className="scroll-soft fixed z-[95] max-h-[calc(100dvh-16px)] min-w-[13rem] max-w-[calc(100vw-16px)] overflow-y-auto rounded-2xl border border-line bg-white p-1.5 shadow-[var(--shadow-lift)]"
               style={{ top: at.top, bottom: at.bottom, left: at.left, right: at.right }}
               initial={{ opacity: 0, scale: 0.98 }}
               animate={{ opacity: 1, scale: 1 }}
@@ -277,6 +302,7 @@ export function Segmented<T extends string>({ value, options, onChange, label, s
       {options.map((o) => (
         <button
           key={o.value}
+          type="button"
           role="radio"
           aria-checked={value === o.value}
           onClick={() => onChange(o.value)}

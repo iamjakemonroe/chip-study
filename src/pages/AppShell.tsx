@@ -1,9 +1,13 @@
 import { useEffect } from 'react';
 import { Navigate, Outlet, useLocation } from 'react-router';
+import { AgeGate } from '../components/AgeGate.tsx';
 import { ChipLoader } from '../components/ChipLoader.tsx';
-import { payStatus } from '../lib/api.ts';
+import { PlatformConsent } from '../institution/PlatformConsent.tsx';
+import { ApiError, payStatus, redeemReferral } from '../lib/api.ts';
+import { dropReferral, pendingReferral, quietReferralError } from '../lib/referral.ts';
 import { useAuth } from '../store/auth.ts';
 import { useFocus } from '../store/focus.ts';
+import { toast } from '../store/toast.ts';
 
 /** The signed-in app: everything under /app. Someone signed out is sent to sign in, and back
  * here after. */
@@ -24,7 +28,10 @@ export function AppShell() {
     <>
       <div className="daylight" />
       <FocusTicker />
+      <Referral />
       <Outlet />
+      <AgeGate />
+      <PlatformConsent />
     </>
   );
 }
@@ -43,5 +50,29 @@ function FocusTicker() {
       document.removeEventListener('visibilitychange', tick);
     };
   }, [running]);
+  return null;
+}
+
+let redeeming = false;
+
+/** A new account that came from a friend's invite link says so, once: both get a week of Pro once
+ * it's really used. A code that can't be used is dropped without a word. */
+function Referral() {
+  const me = useAuth((s) => s.me);
+  useEffect(() => {
+    if (!me || me.tier === 'guest' || redeeming) return;
+    const code = pendingReferral();
+    if (!code) return;
+    redeeming = true;
+    redeemReferral(code)
+      .then((r) => {
+        dropReferral();
+        toast(`Welcome. You came through ${r.referrer}: you’ll both get a week of Pro once you’ve asked Chip 3 questions.`, 'good');
+      })
+      .catch((e) => {
+        if (e instanceof ApiError && quietReferralError(e.raw)) dropReferral();
+      })
+      .finally(() => (redeeming = false));
+  }, [me]);
   return null;
 }

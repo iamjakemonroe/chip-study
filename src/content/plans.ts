@@ -22,5 +22,12 @@ export const STUDENT_FEATURES = [
   'For an account made with your school email',
 ];
 
+/** Pro through an institution: every Pro feature, a little less of Chip's best model. */
+export const INSTITUTION_FEATURES = [
+  'Chip’s best model (Claude Opus) for deep tutoring and feedback, a little less of it than personal Pro',
+  'Everything else in Pro: Chip Fast on top, web research, bigger files and more readings',
+  'Through your institution, with nothing to pay',
+];
+
 /** What counts as a school email, said the same way everywhere. */
 export const SCHOOL_EMAILS = 'a .edu, .ac.uk, .edu.ng or other school email';

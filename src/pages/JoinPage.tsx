@@ -10,6 +10,8 @@ import { ConsentBody } from '../institution/Consent.tsx';
 import { acceptInvite, peekInvite } from '../lib/api.ts';
 import { aRole } from '../lib/institutions.ts';
 import type { InvitePeek } from '../lib/types.ts';
+import { AgeGate } from '../components/AgeGate.tsx';
+import { useAge } from '../store/age.ts';
 import { useAuth } from '../store/auth.ts';
 import { useInstitutions } from '../store/institutions.ts';
 import { toast } from '../store/toast.ts';
@@ -47,8 +49,10 @@ function Join({ token }: { token: string }) {
   }, [token]);
 
   const join = async () => {
-    setBusy(true);
     setError('');
+    // The age question comes first, if it hasn't been answered; then Join again.
+    if (!(await useAge.getState().ensure())) return;
+    setBusy(true);
     try {
       const r = await acceptInvite(token);
       await Promise.all([useAuth.getState().refresh(), useInstitutions.getState().load(true)]);
@@ -178,6 +182,7 @@ function Join({ token }: { token: string }) {
         </Link>
       </header>
       <main className="mx-auto max-w-2xl px-4 pb-24 pt-4 sm:px-5">{body}</main>
+      <AgeGate />
     </div>
   );
 }

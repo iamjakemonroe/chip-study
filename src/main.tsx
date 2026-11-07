@@ -2,9 +2,13 @@ import '@fontsource-variable/inter';
 import './styles/app.css';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
+import { captureReferral } from './lib/referral.ts';
 import { hasSession } from './lib/session.ts';
 
 const root = createRoot(document.getElementById('root')!);
+
+// A friend's invite link (?ref=CODE) is kept on the device, whatever page it opens.
+captureReferral();
 
 // The landing page is all most first visits need: it loads on its own, without the app, the
 // router or the Supabase client. Someone already signed in goes straight to their desk.

@@ -52,7 +52,20 @@ export function SeeLists({
 /** What joining means, told plainly before anyone joins: for a student, what the institution's
  * staff will see and that Pro comes with it; for a teacher or admin, what they'll see and won't.
  * [name] is the institution's, when it's known (a class code doesn't say whose it is). */
-export function ConsentBody({ name, role = 'student', className, stack = false }: { name?: string | null; role?: InstitutionRole; className?: string | null; stack?: boolean }) {
+export function ConsentBody({
+  name,
+  role = 'student',
+  className,
+  stack = false,
+  joined = false,
+}: {
+  name?: string | null;
+  role?: InstitutionRole;
+  className?: string | null;
+  stack?: boolean;
+  /** Already in (from a learning platform): what it sees, with leaving as the choice. */
+  joined?: boolean;
+}) {
   const who = name ? <strong className="font-semibold text-ink">{name}</strong> : 'the school, college or university that runs it';
   if (role !== 'student') {
     return (
@@ -80,11 +93,11 @@ export function ConsentBody({ name, role = 'student', className, stack = false }
             , and you’ll be in <strong className="font-semibold text-ink">{className}</strong>
           </>
         ) : null}
-        . Before you join, here’s what {name ? 'its' : 'their'} admins and your teachers will be able to see.
+        . {joined ? `Here’s what its admins and your teachers can see.` : `Before you join, here’s what ${name ? 'its' : 'their'} admins and your teachers will be able to see.`}
       </p>
       <SeeLists who="you" stack={stack} />
       <p className="text-sm text-ink-3">
-        Joining is your choice. You can leave at any time in Settings, and leaving stops the Pro that comes from {name ? who : 'them'}.
+        {joined ? 'Staying is your choice. You can leave now, or at any time in Settings,' : 'Joining is your choice. You can leave at any time in Settings,'} and leaving stops the Pro that comes from {name ? who : 'them'}.
       </p>
     </div>
   );

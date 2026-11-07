@@ -155,7 +155,7 @@ test('institutions page', async ({ page }, info) => {
   await page.waitForTimeout(1600);
   await noSideScroll(page);
   await page.screenshot({ path: dir('institutions-top', info.project.name) });
-  for (const id of ['why', 'get', 'privacy', 'pilot', 'faq']) {
+  for (const id of ['why', 'get', 'privacy', 'pilot', 'pricing', 'faq']) {
     await page.locator(`#${id}`).scrollIntoViewIfNeeded();
     await page.evaluate((x) => document.getElementById(x)?.scrollIntoView({ block: 'start', behavior: 'instant' }), id);
     await page.waitForTimeout(1200);
@@ -276,7 +276,7 @@ test('settings and the plan, with an institution', async ({ page }, info) => {
   await noSideScroll(page);
   await page.screenshot({ path: dir('settings-institution', info.project.name) });
   await page.goto('/app/plan');
-  await expect(page.getByText(/with nothing to pay/)).toBeVisible();
+  await expect(page.getByText(/It’s yours while you’re part of/)).toBeVisible();
   await page.waitForTimeout(400);
   await noSideScroll(page);
   await page.screenshot({ path: dir('plan-institution', info.project.name), fullPage: true });
@@ -298,4 +298,140 @@ test('Kaivon review', async ({ page }, info) => {
   await page.waitForTimeout(500);
   await noSideScroll(page);
   await page.screenshot({ path: dir('kaivon-approve', info.project.name) });
+});
+
+// ── Batch 2: platforms, age, invites, tutors, themes, invoices, guides ──
+
+test('arriving from a course', async ({ page }, info) => {
+  const m = new MockBackend();
+  const inst = m.inst.seed({}, null);
+  m.inst.platforms.push({ id: 'p1', institution_id: inst.id, name: 'Moodle', issuer: 'https://moodle.lagosbay.edu.ng', client_id: 'c1', deployment_id: 'd1', auth_url: 'https://moodle.lagosbay.edu.ng/auth', jwks_url: 'https://moodle.lagosbay.edu.ng/certs', created_at: new Date().toISOString(), courses: 0 });
+  m.inst.pending.push({ token: 'link-1', platform_id: 'p1', email: 'ada@personal.test', teacher: false, course: 'Physics 110: Mechanics' });
+  await m.install(page, { signedIn: false });
+  await page.goto('/lti#link=link-1');
+  await expect(page.getByRole('heading', { name: 'Link your course to Chip Study' })).toBeVisible();
+  await page.waitForTimeout(400);
+  await noSideScroll(page);
+  await page.screenshot({ path: dir('lti-link', info.project.name), fullPage: true });
+  await page.goto('about:blank');
+  await page.goto(`/lti#token_hash=x&type=magiclink&role=student&confirm=${encodeURIComponent(m.user.email)}`);
+  await expect(page.getByRole('heading', { name: /Continue as/ })).toBeVisible();
+  await noSideScroll(page);
+  await page.screenshot({ path: dir('lti-confirm', info.project.name) });
+  await page.goto('about:blank');
+  await page.goto('/lti#error=unknown_platform');
+  await expect(page.getByRole('heading', { name: 'This platform isn’t connected yet' })).toBeVisible();
+  await noSideScroll(page);
+  await page.screenshot({ path: dir('lti-error', info.project.name) });
+});
+
+test('the age question and the platform consent', async ({ page }, info) => {
+  const m = new MockBackend({ age: null });
+  const inst = m.inst.seed({}, null);
+  m.inst.join(inst.id, m.user.id, 'student', false);
+  await m.install(page);
+  await page.goto('/app');
+  await expect(page.getByRole('dialog', { name: 'One question first' })).toBeVisible();
+  await page.getByRole('radio', { name: /under 18, and a parent/ }).click();
+  await page.waitForTimeout(500);
+  await noSideScroll(page);
+  await page.screenshot({ path: dir('age-question', info.project.name) });
+  await page.getByRole('button', { name: 'Continue' }).click();
+  await expect(page.getByRole('dialog', { name: 'What Lagos Bay University can see' })).toBeVisible();
+  await page.waitForTimeout(500);
+  await noSideScroll(page);
+  await page.screenshot({ path: dir('platform-consent', info.project.name) });
+});
+
+test('an admin’s platform, under-18s and invoices settings', async ({ page }, info) => {
+  const m = new MockBackend();
+  const { inst } = m.inst.seedSchool();
+  m.inst.platforms.push({ id: 'p1', institution_id: inst.id, name: 'Canvas', issuer: 'https://canvas.instructure.com', client_id: '10000000000123', deployment_id: '42:7db438071375c02373713c12c73869ff2f470b68', auth_url: 'https://sso.canvaslms.com/api/lti/authorize_redirect', jwks_url: 'https://sso.canvaslms.com/api/lti/security/jwks', created_at: new Date().toISOString(), courses: 3 });
+  m.inst.invoices.push({ id: 'inv-1', institution_id: inst.id, ref: 'kaivon-inv-000000000000000000000001', label: 'Lagos Bay University: 200 seats, 12 months', seats: 200, months: 12, currency: 'NGN', amount: 1500000, status: 'open', created_at: new Date().toISOString(), paid_at: null });
+  await m.install(page);
+  await page.goto(`/app/institution/${inst.id}?tab=settings`);
+  await expect(page.getByRole('region', { name: 'Learning platform' })).toBeVisible();
+  await page.getByRole('region', { name: 'Learning platform' }).getByRole('radio', { name: 'Blackboard' }).click();
+  await page.waitForTimeout(500);
+  await noSideScroll(page);
+  await page.screenshot({ path: dir('institution-settings-2', info.project.name), fullPage: true });
+});
+
+test('invites, tutors and themes', async ({ page }, info) => {
+  const m = new MockBackend();
+  m.inst.codes.set(m.user.id, 'ADA23456');
+  m.inst.referrals.push({ user_id: 'x1', referrer: m.user.id, rewarded: true, created_at: new Date().toISOString() });
+  const inst = m.inst.seed({}, 'teacher');
+  const bio = m.inst.klass(inst.id, 'Biology 101');
+  m.inst.inClass(bio.id, m.user.id, 'teacher');
+  m.inst.askers.set(bio.id, 9);
+  await m.install(page);
+  await page.goto('/app/settings');
+  await page.locator('#invite').scrollIntoViewIfNeeded();
+  await expect(page.locator('#invite').getByText('https://study.kaivon.app/?ref=ADA23456')).toBeVisible();
+  await page.waitForTimeout(400);
+  await noSideScroll(page);
+  await page.screenshot({ path: dir('settings-invite', info.project.name) });
+  await page.goto(`/app/institution/${inst.id}?tab=classes`);
+  await page.getByRole('button', { name: 'More for Biology 101' }).click();
+  await page.getByRole('menuitem', { name: 'Chip for this course' }).click();
+  await expect(page.getByRole('dialog', { name: 'Chip for Biology 101' }).getByText('How much Chip may help', { exact: true })).toBeVisible();
+  await page.waitForTimeout(500);
+  await noSideScroll(page);
+  await page.screenshot({ path: dir('class-tutor', info.project.name) });
+  await page.keyboard.press('Escape');
+  await page.getByRole('button', { name: 'More for Biology 101' }).click();
+  await page.getByRole('menuitem', { name: 'What the class is asking' }).click();
+  await page.getByRole('button', { name: 'See what they’re asking' }).click();
+  await expect(page.getByRole('heading', { name: 'Reading the brief' })).toBeVisible();
+  await page.waitForTimeout(500);
+  await noSideScroll(page);
+  await page.screenshot({ path: dir('class-themes', info.project.name) });
+});
+
+test('Kaivon reps and invoices', async ({ page }, info) => {
+  const m = new MockBackend();
+  m.inst.staff.add(m.user.id);
+  m.inst.seedSchool();
+  const grace = m.inst.person('Grace Hopper', 'grace@lagosbay.edu.ng');
+  m.inst.reps.set(grace.id, { name: 'Grace, Lagos Bay', since: new Date().toISOString() });
+  m.inst.referrals.push({ user_id: 'x1', referrer: grace.id, rewarded: true, created_at: new Date().toISOString() });
+  await m.install(page);
+  await page.goto('/app/kaivon');
+  await page.getByRole('radio', { name: 'Campus reps' }).click();
+  await expect(page.getByRole('heading', { name: 'Grace, Lagos Bay' })).toBeVisible();
+  await page.waitForTimeout(400);
+  await noSideScroll(page);
+  await page.screenshot({ path: dir('kaivon-reps', info.project.name), fullPage: true });
+  await page.getByRole('radio', { name: 'Institutions' }).click();
+  await page.getByRole('tab', { name: 'Approved', exact: true }).click();
+  await page.getByRole('listitem').filter({ hasText: 'Lagos Bay University' }).getByRole('button', { name: 'Invoices' }).click();
+  await expect(page.getByRole('dialog', { name: 'Invoices for Lagos Bay University' })).toBeVisible();
+  await page.waitForTimeout(500);
+  await noSideScroll(page);
+  await page.screenshot({ path: dir('kaivon-invoices', info.project.name) });
+});
+
+test('study guide', async ({ page }, info) => {
+  const m = new MockBackend();
+  await m.install(page, { signedIn: false });
+  await page.goto('/guides/active-recall');
+  await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+  await page.waitForTimeout(500);
+  await noSideScroll(page);
+  await page.screenshot({ path: dir('guide-top', info.project.name) });
+  await page.getByRole('heading', { name: 'Sources' }).scrollIntoViewIfNeeded();
+  await page.waitForTimeout(500);
+  await page.screenshot({ path: dir('guide-end', info.project.name) });
+});
+
+test('landing, for schools', async ({ page }, info) => {
+  const m = new MockBackend();
+  await m.install(page, { signedIn: false });
+  await page.goto('/');
+  await page.locator('#schools').scrollIntoViewIfNeeded();
+  await page.evaluate(() => document.getElementById('schools')?.scrollIntoView({ block: 'start', behavior: 'instant' }));
+  await page.waitForTimeout(1400);
+  await noSideScroll(page);
+  await page.screenshot({ path: dir('landing-schools', info.project.name) });
 });

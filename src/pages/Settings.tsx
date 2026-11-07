@@ -1,13 +1,15 @@
 import { Building2, GraduationCap, LogOut, ShieldCheck, Trash2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router';
+import { ReferralSection } from '../components/Referral.tsx';
 import { SignOutConfirm } from '../components/SignOut.tsx';
 import { TopBar } from '../components/TopBar.tsx';
 import { Confirm, Segmented } from '../components/ui.tsx';
 import { JoinClassModal } from '../institution/JoinClass.tsx';
 import { forgetMe, leaveInstitution, myClasses } from '../lib/api.ts';
-import { institutionStatus, proThrough, ROLE_LABEL, TONE_CLASS } from '../lib/institutions.ts';
+import { institutionStatus, proThrough, ROLE_LABEL, TONE_CLASS, VIA_INSTITUTION_NOTE } from '../lib/institutions.ts';
 import type { MyClass, MyInstitution } from '../lib/types.ts';
+import { useAge } from '../store/age.ts';
 import { useAuth } from '../store/auth.ts';
 import { PLANS, useFocus } from '../store/focus.ts';
 import { useInstitutions } from '../store/institutions.ts';
@@ -27,6 +29,7 @@ export function Settings() {
   const [joining, setJoining] = useState(false);
   const [leaving, setLeaving] = useState<MyInstitution | null>(null);
   const through = proThrough(me, mine);
+  const age = useAge((s) => s.answer);
   const [classes, setClasses] = useState<MyClass[]>([]);
   const studying = !!mine?.some((m) => m.role === 'student');
   useEffect(() => {
@@ -56,8 +59,21 @@ export function Settings() {
 
         <Section title="Account">
           <Row label="Signed in as" value={<span className="break-all">{email}</span>} />
+          {age !== undefined && (
+            <Row
+              label="Your age"
+              value={
+                <span className="flex flex-wrap items-center justify-end gap-x-3 gap-y-1 text-right">
+                  {age === 'adult' ? '18 or over' : age === 'guardian' ? 'Under 18, with a parent or guardian’s agreement' : 'Not answered yet'}
+                  <button className="text-sm font-semibold text-iris hover:text-iris-2" onClick={() => useAge.setState({ asking: true, later: false })}>
+                    {age ? 'Change' : 'Answer'}
+                  </button>
+                </span>
+              }
+            />
+          )}
           <p className="mt-1 text-sm leading-relaxed text-ink-3">
-            This is your Kaivon account: the same one works in Utopia. {through ? `You have Pro through ${through.name}.` : me?.tier === 'pro' ? 'You’re on Pro.' : 'You’re on the free plan.'}{' '}
+            This is your Kaivon account: the same one works in Utopia. {through ? `You have Pro through ${through.name}, ${VIA_INSTITUTION_NOTE}.` : me?.tier === 'pro' ? 'You’re on Pro.' : 'You’re on the free plan.'}{' '}
             <Link className="font-semibold text-iris" to="/app/plan">
               Plan
             </Link>
@@ -120,7 +136,7 @@ export function Settings() {
           )}
           {studying && (
             <p className="mt-3 text-sm leading-relaxed text-ink-3">
-              Its admins and your teachers see your activity and each assignment’s AI-use record, never your chats, notes or documents.{' '}
+              Its admins and your teachers see your activity and each assignment’s AI-use record, never your chats, notes or documents. Assignments you link to a class can be part of anonymous themes for its teachers, once 5 or more students have asked.{' '}
               <Link to="/privacy" className="underline underline-offset-2">
                 More in Privacy
               </Link>
@@ -143,6 +159,10 @@ export function Settings() {
             </Link>
           </p>
           <JoinClassModal open={joining} onClose={() => setJoining(false)} />
+        </Section>
+
+        <Section title="Invite a friend" id="invite">
+          <ReferralSection />
         </Section>
 
         <Section title="Writing">

@@ -1,11 +1,12 @@
-import { Archive, ChevronDown, Copy, MailPlus, MoreHorizontal, PenLine, Plus, Undo2, UserCog } from 'lucide-react';
+import { Archive, ChevronDown, Copy, GraduationCap, KeyRound, MailPlus, MessagesSquare, MoreHorizontal, PenLine, Plus, Undo2, UserCog } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { ChipLoader } from '../components/ChipLoader.tsx';
-import { Menu, MenuItem, Modal, Spinner } from '../components/ui.tsx';
+import { Confirm, Menu, MenuItem, Modal, Spinner } from '../components/ui.tsx';
 import { site } from '../content/site.ts';
-import { createClass, institutionMembers, setClassMember, updateClass } from '../lib/api.ts';
+import { classNewCode, createClass, institutionMembers, setClassMember, updateClass } from '../lib/api.ts';
 import type { InstitutionMember, StudyClass } from '../lib/types.ts';
 import { toast } from '../store/toast.ts';
+import { ClassThemesModal, ClassTutorModal } from './ClassTools.tsx';
 import { copyText } from './copy.ts';
 import type { InstitutionView } from './InstitutionPage.tsx';
 
@@ -23,10 +24,13 @@ export function ClassesTab({ view }: { view: InstitutionView }) {
   const closed = inst.status === 'rejected' || inst.status === 'suspended';
   const [name, setName] = useState('');
   const [busy, setBusy] = useState(false);
-  const [made, setMade] = useState<{ id: string; name: string; code: string } | null>(null);
+  const [made, setMade] = useState<{ id: string; name: string; code: string; renewed?: boolean } | null>(null);
   const [renaming, setRenaming] = useState<StudyClass | null>(null);
   const [teachersOf, setTeachersOf] = useState<StudyClass | null>(null);
   const [showArchived, setShowArchived] = useState(false);
+  const [tutorOf, setTutorOf] = useState<StudyClass | null>(null);
+  const [themesOf, setThemesOf] = useState<StudyClass | null>(null);
+  const [recoding, setRecoding] = useState<StudyClass | null>(null);
   const live = (classes ?? []).filter((c) => !c.archived);
   const archived = (classes ?? []).filter((c) => c.archived);
 
@@ -117,6 +121,15 @@ export function ClassesTab({ view }: { view: InstitutionView }) {
                           Teachers
                         </MenuItem>
                       )}
+                      <MenuItem icon={<GraduationCap size={15} />} onClick={() => (close(), setTutorOf(c))}>
+                        Chip for this course
+                      </MenuItem>
+                      <MenuItem icon={<MessagesSquare size={15} />} onClick={() => (close(), setThemesOf(c))}>
+                        What the class is asking
+                      </MenuItem>
+                      <MenuItem icon={<KeyRound size={15} />} onClick={() => (close(), setRecoding(c))}>
+                        New code
+                      </MenuItem>
                       <MenuItem icon={<PenLine size={15} />} onClick={() => (close(), setRenaming(c))}>
                         Rename
                       </MenuItem>
@@ -171,7 +184,7 @@ export function ClassesTab({ view }: { view: InstitutionView }) {
         </section>
       )}
 
-      <Modal open={!!made} onClose={() => setMade(null)} title="Your class is ready" width={480}>
+      <Modal open={!!made} onClose={() => setMade(null)} title={made?.renewed ? 'The new code' : 'Your class is ready'} width={480}>
         {made && (
           <div className="text-center">
             <p className="text-ink-2">
@@ -196,6 +209,29 @@ export function ClassesTab({ view }: { view: InstitutionView }) {
         )}
       </Modal>
       <RenameClass target={renaming} onClose={() => setRenaming(null)} onDone={reloadClasses} />
+      <ClassTutorModal target={tutorOf} onClose={() => setTutorOf(null)} />
+      <ClassThemesModal target={themesOf} onClose={() => setThemesOf(null)} />
+      <Confirm
+        open={!!recoding}
+        title={recoding ? `Give ${recoding.name} a new code?` : ''}
+        body={
+          <>
+            The old code{recoding ? <> (<span className="font-mono font-semibold text-ink">{recoding.code}</span>)</> : ''} stops working straight away. Everyone already in the class stays in it. Use this if the code was shared too widely.
+          </>
+        }
+        yes="Make a new code"
+        onClose={() => setRecoding(null)}
+        onYes={async () => {
+          if (!recoding) return;
+          try {
+            const code = await classNewCode(recoding.id);
+            await reloadClasses();
+            setMade({ id: recoding.id, name: recoding.name, code, renewed: true });
+          } catch (e) {
+            toast((e as Error).message, 'warn');
+          }
+        }}
+      />
       <ClassTeachers institutionId={inst.id} target={teachersOf} onClose={() => setTeachersOf(null)} onDone={reloadClasses} />
     </div>
   );

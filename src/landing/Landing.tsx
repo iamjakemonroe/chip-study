@@ -9,7 +9,7 @@ import { Showcase } from './Showcase.tsx';
 import { ModesTour } from './ModesTour.tsx';
 import { useReveal } from './reveal.ts';
 import { Arrow, Footer, SectionHead, useSmoothScroll } from './parts.tsx';
-import { fromUsd, money } from '../lib/currency.ts';
+import { fromUsd, money, priceNote } from '../lib/currency.ts';
 
 /** study.kaivon.app for someone who isn't signed in: what Chip Study is, Chip's six modes, the
  * honest record, focus, the tools, the price and the questions people ask. It loads on its own,
@@ -32,6 +32,7 @@ export function Landing() {
         <Honest />
         <FocusSection />
         <Tools />
+        <ForSchools />
         <Pricing />
         <Faq />
         <FinalCta />
@@ -515,6 +516,107 @@ function ToolDevices() {
   );
 }
 
+function ForSchools() {
+  const points = [
+    'A free pilot first, after Kaivon checks your institution',
+    'Staff see activity and each assignment’s AI-use record, never chats, notes or documents',
+    'It opens inside Moodle, Canvas, Blackboard or Brightspace',
+    'Students join by invite link, class code or school email',
+    'Course tutors: a lecturer’s guidance shapes Chip on their class’s assignments',
+  ];
+  return (
+    <section id="schools" className="l-section" aria-labelledby="schools-title">
+      <div className="l-wrap grid grid-cols-1 items-center gap-14 lg:grid-cols-[1fr_1.05fr]">
+        <div>
+          <p className="l-kicker r-up text-left">For schools, colleges and universities</p>
+          <h2 id="schools-title" className="l-h2 r-up text-left" style={{ ['--d' as string]: '0.06s' }}>
+            Bring Chip Study to your students.
+          </h2>
+          <p className="l-sublead r-up text-left" style={{ ['--d' as string]: '0.12s' }}>
+            Students learn with AI honestly, and your institution sees the effort and the help behind each assignment. It works alongside the AI tools you already give them.
+          </p>
+          <ul className="mt-8 space-y-3">
+            {points.map((t, i) => (
+              <li key={t} className="l-tick r-up" style={{ ['--d' as string]: `${0.06 * i}s` }}>
+                {t}
+              </li>
+            ))}
+          </ul>
+          <div className="mt-9 flex flex-wrap gap-3 r-up">
+            <a href="/institutions" className="btn btn-primary">
+              Chip Study for institutions <Arrow />
+            </a>
+            <a href="/app/institutions/new" className="btn btn-ghost">
+              Register your institution
+            </a>
+          </div>
+        </div>
+        <div className="r-up" style={{ ['--d' as string]: '0.1s' }}>
+          <SchoolsCard />
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/** A class, as its teacher sees it: an illustration, marked as an example. */
+function SchoolsCard() {
+  return (
+    <div className="l-decl">
+      <div className="flex items-start justify-between gap-4">
+        <div className="min-w-0">
+          <p className="text-xs font-semibold uppercase tracking-[0.1em] text-ink-3">Your class</p>
+          <p className="mt-1 text-xl font-semibold tracking-[-0.015em]">Biology 101</p>
+        </div>
+        <span className="chip-tag bg-paper-2 text-ink-3">Example</span>
+      </div>
+      <p className="mt-5 text-xs font-semibold uppercase tracking-[0.08em] text-ink-3">Opens inside</p>
+      <div className="mt-2 flex flex-wrap gap-2">
+        {['Moodle', 'Canvas', 'Blackboard', 'Brightspace'].map((p) => (
+          <span key={p} className="rounded-full border border-line bg-white px-3 py-1 text-sm font-semibold text-ink-2">
+            {p}
+          </span>
+        ))}
+      </div>
+      <div className="mt-5 rounded-2xl bg-mint-soft/70 p-4">
+        <p className="flex items-center justify-between gap-3 text-sm font-semibold text-[#16795f]">
+          <span>Course tutor</span>
+          <span className="rounded-full bg-white/80 px-2.5 py-0.5 text-xs">Hints only</span>
+        </p>
+        <p className="mt-1.5 text-sm leading-relaxed text-ink-2">On this class’s assignments, Chip gives hints and the next step, in the course’s own terms, as the lecturer set it.</p>
+      </div>
+      <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
+        <div className="rounded-2xl bg-paper p-4">
+          <p className="font-semibold">Staff see</p>
+          <ul className="mt-2 space-y-1.5 text-ink-2">
+            {['Activity', 'Practice scores', 'AI-use records'].map((t) => (
+              <li key={t} className="flex items-center gap-2">
+                <span className="text-mint" aria-hidden="true">
+                  ✓
+                </span>
+                {t}
+              </li>
+            ))}
+          </ul>
+        </div>
+        <div className="rounded-2xl bg-paper p-4">
+          <p className="font-semibold">Never</p>
+          <ul className="mt-2 space-y-1.5 text-ink-2">
+            {['Chats', 'Notes', 'Documents'].map((t) => (
+              <li key={t} className="flex items-center gap-2">
+                <span className="text-rose" aria-hidden="true">
+                  ✕
+                </span>
+                {t}
+              </li>
+            ))}
+          </ul>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function Pricing() {
   const free = FREE_FEATURES;
   const pro = PRO_FEATURES;
@@ -554,7 +656,7 @@ function Pricing() {
             </a>
           </div>
         </div>
-        <p className="mt-6 text-center text-sm text-ink-3">Prices in US dollars; your bank converts if your card is in another currency.</p>
+        <p className="mt-6 text-center text-sm text-ink-3">{priceNote()}</p>
       </div>
     </section>
   );
