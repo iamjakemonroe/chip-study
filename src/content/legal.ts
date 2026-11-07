@@ -1,3 +1,4 @@
+import { CAN_SEE, CANT_SEE } from './institutions.ts';
 import { site } from './site.ts';
 
 /** A paragraph, or a list (an array of items). */
@@ -11,7 +12,7 @@ export interface LegalDoc {
   sections: { heading: string; body: Block[] }[];
 }
 
-const updated = '29 October 2026';
+const updated = '7 November 2026';
 const contact = site.email;
 
 export const terms: LegalDoc = {
@@ -83,6 +84,19 @@ export const terms: LegalDoc = {
       ],
     },
     {
+      heading: 'Chip Study through your school, college or university',
+      body: [
+        'An institution (a school, college or university) can register for Chip Study and bring its students in. We check each institution before any students can join.',
+        [
+          'Joining is your choice. You join by an invite link, a class code or, once we’ve confirmed the institution’s email domain, your school email. Each way tells you what its staff can see before you join.',
+          'While you’re part of an active institution, you get Chip Study Pro at no cost to you. It stops if you leave, if the institution’s pilot or plan ends, or if it’s paused, and your account carries on free (or on Pro you pay for yourself).',
+          'Its admins and your teachers can see your activity and each assignment’s AI-use record, never your chats, notes or documents. The Privacy Policy says exactly what.',
+          'You can leave at any time in Settings › Your institution. Your work stays yours.',
+        ],
+        'If you run Chip Study for an institution, as an admin or a teacher, use what you see only to support your students, under your institution’s own rules, and keep it confidential. Institutions get a free pilot first; any price after it is agreed with us before anything is charged.',
+      ],
+    },
+    {
       heading: 'Using it well',
       body: [
         [
@@ -137,6 +151,7 @@ export const privacy: LegalDoc = {
           'Your conversations with Chip, and each assignment’s AI-use record.',
           'Usage: how much Chip time you’ve used each day (numbers only), so the allowances work.',
           'Payments for Pro: what you bought and when, and Flutterwave’s reference. We never see your full card number.',
+          'If you join a school, college or university on Chip Study: which one, your role there and your classes.',
         ],
         'When you add a document (a PDF, or a Word, Excel, PowerPoint or other file), its text is taken out on your own device and only the text is kept. Macros in an Excel file are read as text, never run. If you ask Chip to read a scanned file or a photo, it’s sent to our AI provider for that one reading and not stored.',
       ],
@@ -144,7 +159,7 @@ export const privacy: LegalDoc = {
     {
       heading: 'How we use it',
       body: [
-        'To run your workspace, to have Chip answer you, to keep your AI-use record, to keep the allowances fair, to take payments and give refunds, to offer the student price (we check whether your email’s domain is a school’s), to help you when you ask, and to keep the service safe and working. We don’t sell your information, we don’t show ads, and we don’t use your work to train AI models.',
+        'To run your workspace, to have Chip answer you, to keep your AI-use record, to keep the allowances fair, to take payments and give refunds, to offer the student price (we check whether your email’s domain is a school’s), to show an institution you’ve joined what’s set out below, to help you when you ask, and to keep the service safe and working. We don’t sell your information, we don’t show ads, and we don’t use your work to train AI models.',
       ],
     },
     {
@@ -161,6 +176,17 @@ export const privacy: LegalDoc = {
       ],
     },
     {
+      heading: 'If you join an institution',
+      body: [
+        'Joining a school, college or university on Chip Study is your choice, and we show you this before you join. Its admins can see every student there; your teachers can see the students in their classes. They can see:',
+        CAN_SEE.you,
+        'They can’t see:',
+        CANT_SEE.you,
+        'You can leave at any time in Settings › Your institution. Once you leave, its staff can’t see anything of yours, old or new, and the Chip Study Pro that came from it stops.',
+        'When an institution registers, we keep what it tells us (its name, country, website, email domain, its contact’s name and role, and the email of whoever registered it) to check it and to run it.',
+      ],
+    },
+    {
       heading: 'On your device',
       body: [
         'Chip Study keeps your sign-in and preferences in your browser’s storage, and a copy of the document you’re writing until it’s saved, so nothing is lost if the connection drops. There are no advertising or tracking cookies and no analytics.',
@@ -171,7 +197,7 @@ export const privacy: LegalDoc = {
       body: [
         [
           'Delete an assignment, a document, a note or a source at any time: it’s gone at once, with everything in it.',
-          'Settings › Delete all my study data removes every assignment, document, conversation and focus session you have in Chip Study, and keeps your Kaivon account.',
+          'Settings › Delete all my study data removes every assignment, document, conversation and focus session you have in Chip Study, takes you out of any institution you joined as a student, and keeps your Kaivon account.',
           'Deleting your Kaivon account (in Utopia: Settings › Delete account) deletes your Chip Study data too.',
         ],
         'Daily usage numbers and payment records are kept without your work, because fair use and our accounts rely on them.',

@@ -1,5 +1,6 @@
 User-agent: *
 Allow: /
 Disallow: /app
+Disallow: /join
 
 Sitemap: https://study.kaivon.app/sitemap.xml

@@ -16,6 +16,8 @@ const router = createBrowserRouter([
   { path: '/signin', lazy: () => import('./pages/SignIn.tsx').then((m) => ({ Component: m.SignIn })) },
   { path: '/terms', lazy: () => import('./pages/Legal.tsx').then((m) => ({ Component: m.Terms })) },
   { path: '/privacy', lazy: () => import('./pages/Legal.tsx').then((m) => ({ Component: m.Privacy })) },
+  { path: '/institutions', lazy: () => import('./landing/Institutions.tsx').then((m) => ({ Component: m.Institutions })) },
+  { path: '/join/:token', lazy: () => import('./pages/JoinPage.tsx').then((m) => ({ Component: m.JoinPage })) },
   {
     path: '/app',
     lazy: () => import('./pages/AppShell.tsx').then((m) => ({ Component: m.AppShell })),
@@ -25,6 +27,9 @@ const router = createBrowserRouter([
       { path: 'review', lazy: () => import('./pages/ReviewPage.tsx').then((m) => ({ Component: m.ReviewPage })) },
       { path: 'plan', lazy: () => import('./pages/PlanPage.tsx').then((m) => ({ Component: m.PlanPage })) },
       { path: 'settings', lazy: () => import('./pages/Settings.tsx').then((m) => ({ Component: m.Settings })) },
+      { path: 'institutions/new', lazy: () => import('./pages/InstitutionNew.tsx').then((m) => ({ Component: m.InstitutionNew })) },
+      { path: 'institution/:id', lazy: () => import('./institution/InstitutionPage.tsx').then((m) => ({ Component: m.InstitutionPage })) },
+      { path: 'kaivon', lazy: () => import('./pages/KaivonPage.tsx').then((m) => ({ Component: m.KaivonPage })) },
     ],
   },
   { path: '*', lazy: () => import('./pages/NotFound.tsx').then((m) => ({ Component: m.NotFound })) },

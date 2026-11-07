@@ -7,6 +7,7 @@ import { Orb } from '../components/Orb.tsx';
 import { Spinner } from '../components/ui.tsx';
 import { site } from '../content/site.ts';
 import { looksLikeSchoolEmail } from '../lib/school.ts';
+import { safeNext } from '../lib/session.ts';
 import { sendCode, useAuth, verifyCode } from '../store/auth.ts';
 
 const ease = [0.2, 0.7, 0.1, 1] as const;
@@ -123,6 +124,11 @@ export function SignIn() {
                 <p className="mt-2 leading-relaxed text-ink-2">
                   Use your <strong className="font-semibold text-ink">Kaivon account</strong>, the same one you use in Utopia. New here? We’ll make you one.
                 </p>
+                {next.startsWith('/join/') && (
+                  <p className="mt-3 rounded-2xl bg-iris-soft px-4 py-3 text-sm leading-relaxed text-iris-2">
+                    You have an invite. Sign in with the email it was sent to, and it opens next.
+                  </p>
+                )}
                 <label className="label mt-8" htmlFor="email">
                   Email
                 </label>
@@ -231,9 +237,4 @@ export function SignIn() {
       </main>
     </div>
   );
-}
-
-/** Only paths inside the app (never another site). */
-function safeNext(next: string | null): string {
-  return next && next.startsWith('/app') && !next.startsWith('//') ? next : '/app';
 }

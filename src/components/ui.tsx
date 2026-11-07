@@ -347,3 +347,21 @@ export function AutoTextarea({ value, onChange, maxRows = 8, className = '', ...
   }, [value, maxRows]);
   return <textarea ref={ref} rows={1} value={value} onChange={(e) => onChange(e.target.value)} className={className} {...rest} />;
 }
+
+/** A form field: its label (and whether it can be left empty), a hint under it, or what's wrong. */
+export function Field({ id, label, optional, hint, error, children }: { id: string; label: string; optional?: boolean; hint?: string; error?: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <label className="label" htmlFor={id}>
+        {label} {optional && <span className="font-normal text-ink-4">(optional)</span>}
+      </label>
+      {children}
+      {hint && !error && <p className="mt-1.5 text-xs leading-relaxed text-ink-3">{hint}</p>}
+      {error && (
+        <p className="mt-1.5 text-sm text-rose" role="alert">
+          {error}
+        </p>
+      )}
+    </div>
+  );
+}

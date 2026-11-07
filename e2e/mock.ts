@@ -1,4 +1,5 @@
 import type { Page, Route } from '@playwright/test';
+import { MockInstitutions, Raise } from './mock-institutions';
 
 /** A pretend Supabase for the end-to-end tests, answering the app's requests in the browser
  * (route interception): sign-in by code, the study tables (PostgREST: select, filters, order,
@@ -57,6 +58,8 @@ export class MockBackend {
   calls: { method: string; path: string; body: unknown }[] = [];
   fastUsed = 0;
   bestUsed = 0;
+  /** Schools, colleges and universities: seed them with inst.seed(), inst.klass() and so on. */
+  inst = new MockInstitutions(() => ({ id: this.user.id, name: this.opts.name ?? 'Ada Lovelace', email: this.user.email }));
 
   constructor(public opts: MockOptions = {}) {}
 
@@ -214,14 +217,16 @@ export class MockBackend {
   }
 
   me() {
-    const pro = this.opts.tier === 'pro';
+    // Pro paid for on the web has a date it runs to; Pro through an institution doesn't.
+    const paid = this.opts.tier === 'pro';
+    const pro = paid || this.inst.proFor(this.user.id);
     const onStudent = pro && this.opts.plan === 'student';
     const out = this.opts.chipOut;
     return {
       tier: pro ? 'pro' : 'free',
       plan: pro ? (onStudent ? 'student' : 'pro') : null,
       name: this.opts.name ?? 'Ada Lovelace',
-      pro_until: pro ? new Date(Date.now() + 20 * 86_400_000).toISOString() : null,
+      pro_until: paid ? new Date(Date.now() + 20 * 86_400_000).toISOString() : null,
       resets_at: new Date(Date.now() + 6 * 3_600_000).toISOString(),
       fast: { used: out ? 0.03 : this.fastUsed, cap: pro ? 0.06 : 0.03, avg: 0.0012 },
       best: pro ? { used: this.bestUsed, cap: onStudent ? 0.45 : 0.6, avg: 0.03, period_used: 1.1, period_cap: onStudent ? 3.3 : 4.5 } : null,
@@ -265,7 +270,16 @@ export class MockBackend {
     }
     if (fn === 'study_forget_me') {
       for (const t of TABLES) this.db[t] = [];
+      this.inst.forget(this.user.id);
       return this.json(route, null);
+    }
+    if (this.inst.handles(fn)) {
+      try {
+        return this.json(route, this.inst.call(fn, args) ?? null);
+      } catch (e) {
+        if (e instanceof Raise) return this.json(route, { code: 'P0001', message: e.message, details: null, hint: null }, 400);
+        throw e;
+      }
     }
     return this.json(route, { message: `unknown function ${fn}` }, 404);
   }

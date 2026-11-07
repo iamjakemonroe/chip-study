@@ -1,5 +1,5 @@
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
-import { Archive, ArrowRight, CheckCircle2, Circle, Clock, Flame, GraduationCap, Layers, MoreHorizontal, Pause, Play, Plus, Sparkles, Trash2, Undo2 } from 'lucide-react';
+import { Archive, ArrowRight, Building2, CheckCircle2, Circle, Clock, Flame, GraduationCap, Layers, MoreHorizontal, Pause, Play, Plus, Sparkles, Trash2, Undo2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router';
 import { FocusTip, focusTipSeen } from '../components/FocusTip.tsx';
@@ -7,6 +7,8 @@ import { NewAssignment } from '../components/NewAssignment.tsx';
 import { Orb } from '../components/Orb.tsx';
 import { TopBar } from '../components/TopBar.tsx';
 import { Confirm, Menu, MenuItem, Ring } from '../components/ui.tsx';
+import { JoinClassModal } from '../institution/JoinClass.tsx';
+import { SchoolCard } from '../institution/SchoolCard.tsx';
 import { chipTime, describe } from '../lib/allowance.ts';
 import { deleteAssignment, listAssignments, listDueCards, listFocusSince, listPracticeSince, listTasks, updateAssignment, updateTask } from '../lib/api.ts';
 import { COLORS, TONE_STYLES } from '../lib/colors.ts';
@@ -15,6 +17,7 @@ import { streak } from '../lib/review.ts';
 import type { Assignment, FocusSession, Practice, Task } from '../lib/types.ts';
 import { useAuth } from '../store/auth.ts';
 import { clock, PLANS, remaining, useFocus } from '../store/focus.ts';
+import { useInstitutions } from '../store/institutions.ts';
 import { toast } from '../store/toast.ts';
 
 const ease = [0.2, 0.7, 0.1, 1] as const;
@@ -33,6 +36,8 @@ export function Dashboard() {
   const [creating, setCreating] = useState(false);
   const [removing, setRemoving] = useState<Assignment | null>(null);
   const [failed, setFailed] = useState(false);
+  const [joining, setJoining] = useState(false);
+  const running = (useInstitutions((s) => s.mine) ?? []).filter((m) => m.role !== 'student');
 
   // The floating New button (phones) shows only once the page's own has scrolled away above.
   const newRef = useRef<HTMLButtonElement>(null);
@@ -184,6 +189,22 @@ export function Dashboard() {
           </motion.div>
         </div>
 
+        <SchoolCard />
+        {running.length > 0 && (
+          <motion.section {...appear(5)} className="mt-4 flex flex-wrap gap-2" aria-label="Your institutions">
+            {running.map((m) => (
+              <Link key={m.id} to={`/app/institution/${m.id}`} className="flex min-w-0 max-w-full items-center gap-2 rounded-full border border-line bg-white/70 py-1.5 pl-2 pr-3.5 text-sm font-semibold transition-colors hover:bg-white">
+                <span className="grid h-6 w-6 flex-none place-items-center rounded-full bg-iris-soft text-iris">
+                  <Building2 size={13} />
+                </span>
+                <span className="truncate">{m.name}</span>
+                <span className="flex-none font-medium text-ink-3">· {m.role === 'admin' ? 'Admin' : 'Teacher'}</span>
+                <ArrowRight size={14} className="flex-none text-ink-4" />
+              </Link>
+            ))}
+          </motion.section>
+        )}
+
         <section className="mt-12">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <h2 className="text-xl font-semibold tracking-[-0.015em]">Your studies</h2>
@@ -195,6 +216,9 @@ export function Dashboard() {
                   </button>
                 ))}
               </div>
+              <button className="btn btn-ghost btn-sm" onClick={() => setJoining(true)}>
+                <GraduationCap size={15} /> Join a class
+              </button>
               <button ref={newRef} className="btn btn-primary btn-sm" onClick={() => setCreating(true)}>
                 <Plus size={16} /> New
               </button>
@@ -315,6 +339,7 @@ export function Dashboard() {
       </main>
 
       <NewAssignment open={creating} onClose={() => setCreating(false)} count={assignments?.length ?? 0} />
+      <JoinClassModal open={joining} onClose={() => setJoining(false)} />
       <Confirm
         open={!!removing}
         title={removing?.kind === 'topic' ? `Delete “${removing.title}”?` : 'Delete this assignment?'}

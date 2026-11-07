@@ -1,6 +1,6 @@
-import { Check, GraduationCap, Sparkles, Zap } from 'lucide-react';
+import { Building2, Check, GraduationCap, Sparkles, Zap } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
-import { useSearchParams } from 'react-router';
+import { Link, useSearchParams } from 'react-router';
 import { ChipLoader } from '../components/ChipLoader.tsx';
 import { Orb } from '../components/Orb.tsx';
 import { TopBar } from '../components/TopBar.tsx';
@@ -10,13 +10,17 @@ import { cancelPro, confirmPayment, knownPayStatus, PAY_WAIT, payStatus, subscri
 import { FREE_FEATURES, PRO_FEATURES, SCHOOL_EMAILS, STUDENT_FEATURES } from '../content/plans.ts';
 import { site } from '../content/site.ts';
 import { useAuth } from '../store/auth.ts';
+import { useInstitutions } from '../store/institutions.ts';
 import { toast } from '../store/toast.ts';
 import { CURRENCY, fromUsd, money } from '../lib/currency.ts';
+import { proThrough } from '../lib/institutions.ts';
+import type { Me } from '../lib/types.ts';
 
 /** Your plan: what's left of Chip time, Free and Pro side by side, and paying for Pro (once it's
  * open). A school email sees Pro at the student price (and can still pick full Pro); anyone else
- * hears that students get it. Chip's loader stands in until all of it is known, then it shows at
- * once. Coming back from Flutterwave's checkout lands here to confirm the payment. */
+ * hears that students get it. Pro from an institution says whose it is, with nothing to buy or
+ * cancel. Chip's loader stands in until all of it is known, then it shows at once. Coming back
+ * from Flutterwave's checkout lands here to confirm the payment. */
 export function PlanPage() {
   const me = useAuth((s) => s.me);
   const refresh = useAuth((s) => s.refresh);
@@ -26,6 +30,8 @@ export function PlanPage() {
   const [busy, setBusy] = useState<'pro' | 'student' | null>(null);
   const [cancelling, setCancelling] = useState(false);
   const confirmed = useRef(false);
+  const mine = useInstitutions((s) => s.mine);
+  const through = proThrough(me, mine);
 
   useEffect(() => {
     document.title = 'Your plan · Chip Study';
@@ -34,7 +40,11 @@ export function PlanPage() {
     // Pro can be bought (asked as the app opened, and given up on after PAY_WAIT), and the account
     // with its prices (the one already here, or else the one on its way, for no longer than that).
     const here = useAuth.getState().me ?? Promise.race([account, new Promise<null>((done) => setTimeout(() => done(null), PAY_WAIT))]);
-    void Promise.all([payStatus(), here]).then(([status]) => setPay(status));
+    // Pro with no paid-until date may come from an institution: which one is known first, so the
+    // plans never show a Cancel button that then turns into the institution's name.
+    const whose = (m: Me | null) =>
+      m?.tier === 'pro' && !m.pro_until ? Promise.race([useInstitutions.getState().load(), new Promise((done) => setTimeout(done, PAY_WAIT))]) : null;
+    void Promise.all([payStatus(), Promise.resolve(here).then(whose)]).then(([status]) => setPay(status));
   }, [refresh]);
 
   // Back from checkout: ?status=successful&tx_ref=…&transaction_id=…
@@ -109,6 +119,7 @@ export function PlanPage() {
                 <p className="text-sm font-semibold text-ink-3">Chip’s best model</p>
                 <p className="mt-0.5 text-lg font-semibold">{best ? describe(best) : 'With Pro'}</p>
                 {me?.pro_until && <p className="text-sm text-ink-3">Pro until {new Date(me.pro_until).toLocaleDateString(undefined, { day: 'numeric', month: 'long' })}</p>}
+                {through && <p className="text-sm text-ink-3">Pro through {through.name}</p>}
               </div>
             </div>
           </section>
@@ -124,15 +135,28 @@ export function PlanPage() {
             />
             <PlanCard
               name="Pro"
-              tag={asStudent ? 'Student price' : undefined}
-              price={money(shown)}
-              was={asStudent ? money(price) : undefined}
-              note="a month, cancel any time"
+              tag={asStudent && !through ? 'Student price' : undefined}
+              price={through ? 'Included' : money(shown)}
+              was={asStudent && !through ? money(price) : undefined}
+              note={through ? `through ${through.name}` : 'a month, cancel any time'}
               features={asStudent ? STUDENT_FEATURES : PRO_FEATURES}
               current={me?.tier === 'pro'}
               glow
               footer={
-                me?.tier === 'pro' ? (
+                through ? (
+                  <div className="flex gap-3 rounded-2xl bg-mint-soft px-4 py-3">
+                    <Building2 size={18} className="mt-0.5 flex-none text-mint" />
+                    <div>
+                      <p className="font-semibold text-ink">Pro through {through.name}</p>
+                      <p className="mt-0.5 text-sm leading-relaxed text-ink-2">
+                        It’s yours while you’re part of {through.name}, with nothing to pay.{' '}
+                        <Link to="/app/settings#institution" className="font-semibold text-[#16795f] underline underline-offset-2">
+                          Your institution
+                        </Link>
+                      </p>
+                    </div>
+                  </div>
+                ) : me?.tier === 'pro' ? (
                   <button className="btn btn-ghost btn-sm" onClick={() => setCancelling(true)}>
                     Cancel Pro
                   </button>

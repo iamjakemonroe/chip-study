@@ -33,31 +33,36 @@ async function askChip(page: Page, mode: string, text: string) {
   await page.getByRole('button', { name: 'Send' }).click();
 }
 
-test('landing leads with learning, and every link goes somewhere', async ({ page }) => {
-  const errors: string[] = [];
-  page.on('pageerror', (e) => errors.push(e.message));
-  const m = new MockBackend();
-  await m.install(page, { signedIn: false });
-  await page.goto('/');
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText(/Understand anything\. Really learn it\./);
-  await expect(page.getByRole('heading', { name: 'A tutor that helps you think.' })).toBeAttached();
-  await expect(page.getByText('$7.99', { exact: true })).toBeAttached();
-  await expect(page.getByText('Launching soon')).toBeAttached();
-  await expect(page.getByText('Students: Pro for $5.99 a month')).toBeAttached();
-  const student = page.locator('details', { hasText: 'Is there a student discount?' });
-  await student.locator('summary').click();
-  await expect(student.getByText(/Sign up with your school email/)).toBeVisible();
-  const q = page.locator('details', { hasText: 'Will it actually help me learn?' });
-  await q.locator('summary').click();
-  await expect(q.getByText('Chip’s default is to guide you')).toBeVisible();
-  await page.getByRole('link', { name: 'Terms of Service' }).click();
-  await expect(page.getByRole('heading', { name: 'Terms of Service' })).toBeVisible();
-  await page.goto('/privacy');
-  await expect(page.getByRole('heading', { name: 'Privacy Policy' })).toBeVisible();
-  await page.goto('/');
-  await page.getByRole('link', { name: /Start learning free/ }).first().click();
-  await expect(page).toHaveURL(/\/signin$/);
-  expect(errors).toEqual([]);
+// The landing page's prices, in dollars: as anyone outside Nigeria sees them.
+test.describe('outside Nigeria', () => {
+  test.use({ timezoneId: 'Europe/London' });
+
+  test('landing leads with learning, and every link goes somewhere', async ({ page }) => {
+    const errors: string[] = [];
+    page.on('pageerror', (e) => errors.push(e.message));
+    const m = new MockBackend();
+    await m.install(page, { signedIn: false });
+    await page.goto('/');
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText(/Understand anything\. Really learn it\./);
+    await expect(page.getByRole('heading', { name: 'A tutor that helps you think.' })).toBeAttached();
+    await expect(page.getByText('$7.99', { exact: true })).toBeAttached();
+    await expect(page.getByText('Launching soon')).toBeAttached();
+    await expect(page.getByText('Students: Pro for $5.99 a month')).toBeAttached();
+    const student = page.locator('details', { hasText: 'Is there a student discount?' });
+    await student.locator('summary').click();
+    await expect(student.getByText(/Sign up with your school email/)).toBeVisible();
+    const q = page.locator('details', { hasText: 'Will it actually help me learn?' });
+    await q.locator('summary').click();
+    await expect(q.getByText('Chip’s default is to guide you')).toBeVisible();
+    await page.getByRole('link', { name: 'Terms of Service' }).click();
+    await expect(page.getByRole('heading', { name: 'Terms of Service' })).toBeVisible();
+    await page.goto('/privacy');
+    await expect(page.getByRole('heading', { name: 'Privacy Policy' })).toBeVisible();
+    await page.goto('/');
+    await page.getByRole('link', { name: /Start learning free/ }).first().click();
+    await expect(page).toHaveURL(/\/signin$/);
+    expect(errors).toEqual([]);
+  });
 });
 
 test('signing in with a Kaivon account, by emailed code', async ({ page }) => {
@@ -267,108 +272,114 @@ test('signing out asks first, from the menu and from settings', async ({ page })
   await expect(page).toHaveURL(/\/signin$/);
 });
 
-test('a school email sees Pro at the student price, and can still pick full Pro', async ({ page }) => {
-  const m = new MockBackend({ payOn: true, student: true });
-  await m.install(page);
-  await page.route('https://checkout.flutterwave.test/**', (route) => route.fulfill({ contentType: 'text/html', body: '<h1>Checkout</h1>' }));
-  await page.goto('/app/plan');
-  await expect(page.getByText('Student price')).toBeVisible();
-  await expect(page.getByText('$5.99', { exact: true })).toBeVisible();
-  await expect(page.locator('s', { hasText: '$7.99' })).toBeVisible();
-  await expect(page.getByText(/Students get Pro/)).toHaveCount(0);
-  await nothingClipped(page);
-  await page.getByRole('button', { name: 'Go Pro for $5.99 a month' }).click();
-  await expect(page.getByRole('heading', { name: 'Checkout' })).toBeVisible();
-  const asked = () => m.made('/functions/v1/web-pay', 'POST').map((r) => r.body as { action: string; plan?: string }).filter((b) => b.action === 'subscribe');
-  expect(asked().at(-1)?.plan).toBe('study.pro.student.monthly');
-  await page.goto('/app/plan');
-  await page.getByRole('button', { name: 'Full Pro is $7.99' }).click();
-  await expect(page.getByRole('heading', { name: 'Checkout' })).toBeVisible();
-  expect(asked().at(-1)?.plan).toBe('study.pro.monthly');
-});
+// The e2e browsers are in Lagos (Africa/Lagos), where buyers pay in naira; these check the
+// dollar prices everyone else sees, so they shop from London.
+test.describe('paying in US dollars, outside Nigeria', () => {
+  test.use({ timezoneId: 'Europe/London' });
 
-test('anyone else pays full Pro, and hears that students get it for less', async ({ page }) => {
-  const m = new MockBackend({ payOn: true });
-  await m.install(page);
-  await page.route('https://checkout.flutterwave.test/**', (route) => route.fulfill({ contentType: 'text/html', body: '<h1>Checkout</h1>' }));
-  await page.goto('/app/plan');
-  await expect(page.getByText('Students get Pro for $5.99 a month')).toBeVisible();
-  await expect(page.getByText('Student price')).toHaveCount(0);
-  await nothingClipped(page);
-  await page.getByRole('button', { name: 'Go Pro for $7.99 a month' }).click();
-  await expect(page.getByRole('heading', { name: 'Checkout' })).toBeVisible();
-  const subscribed = m.made('/functions/v1/web-pay', 'POST').map((r) => r.body as { action: string; plan?: string }).filter((b) => b.action === 'subscribe');
-  expect(subscribed.at(-1)?.plan).toBe('study.pro.monthly');
-});
-
-test('on the student plan: Pro, with the student plan’s limits', async ({ page }) => {
-  const m = new MockBackend({ tier: 'pro', plan: 'student', student: true });
-  await m.install(page);
-  await page.goto('/app/plan');
-  await expect(page.getByText('Current')).toBeVisible();
-  await expect(page.getByText('Student price')).toBeVisible();
-  await expect(page.getByText(/about 110 in-depth messages a month/)).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Cancel Pro' })).toBeVisible();
-});
-
-/** Keeps what the plan page has shown, in order, from the first thing on it: Chip's loader, the
- * Pro price, the button to pay. */
-async function watchPlan(page: Page) {
-  await page.addInitScript(() => {
-    const seen: string[] = [];
-    Object.assign(window, { planSeen: seen });
-    new MutationObserver(() => {
-      const text = document.querySelector('main')?.textContent ?? '';
-      const now = [text.includes('Opening your plan') && 'loader', text.includes('$7.99') && 'price', text.includes('Go Pro for') && 'button'].filter(Boolean).join(' + ');
-      if (now && now !== seen.at(-1)) seen.push(now);
-    }).observe(document, { childList: true, subtree: true, characterData: true });
+  test('a school email sees Pro at the student price, and can still pick full Pro', async ({ page }) => {
+    const m = new MockBackend({ payOn: true, student: true });
+    await m.install(page);
+    await page.route('https://checkout.flutterwave.test/**', (route) => route.fulfill({ contentType: 'text/html', body: '<h1>Checkout</h1>' }));
+    await page.goto('/app/plan');
+    await expect(page.getByText('Student price')).toBeVisible();
+    await expect(page.getByText('$5.99', { exact: true })).toBeVisible();
+    await expect(page.locator('s', { hasText: '$7.99' })).toBeVisible();
+    await expect(page.getByText(/Students get Pro/)).toHaveCount(0);
+    await nothingClipped(page);
+    await page.getByRole('button', { name: 'Go Pro for $5.99 a month' }).click();
+    await expect(page.getByRole('heading', { name: 'Checkout' })).toBeVisible();
+    const asked = () => m.made('/functions/v1/web-pay', 'POST').map((r) => r.body as { action: string; plan?: string }).filter((b) => b.action === 'subscribe');
+    expect(asked().at(-1)?.plan).toBe('study.pro.student.monthly');
+    await page.goto('/app/plan');
+    await page.getByRole('button', { name: 'Full Pro is $7.99' }).click();
+    await expect(page.getByRole('heading', { name: 'Checkout' })).toBeVisible();
+    expect(asked().at(-1)?.plan).toBe('study.pro.monthly');
   });
-  return () => page.evaluate(() => (window as unknown as { planSeen: string[] }).planSeen);
-}
 
-const statusChecks = (m: MockBackend) => m.made('/functions/v1/web-pay', 'POST').filter((r) => (r.body as { action: string }).action === 'status').length;
+  test('anyone else pays full Pro, and hears that students get it for less', async ({ page }) => {
+    const m = new MockBackend({ payOn: true });
+    await m.install(page);
+    await page.route('https://checkout.flutterwave.test/**', (route) => route.fulfill({ contentType: 'text/html', body: '<h1>Checkout</h1>' }));
+    await page.goto('/app/plan');
+    await expect(page.getByText('Students get Pro for $5.99 a month')).toBeVisible();
+    await expect(page.getByText('Student price')).toHaveCount(0);
+    await nothingClipped(page);
+    await page.getByRole('button', { name: 'Go Pro for $7.99 a month' }).click();
+    await expect(page.getByRole('heading', { name: 'Checkout' })).toBeVisible();
+    const subscribed = m.made('/functions/v1/web-pay', 'POST').map((r) => r.body as { action: string; plan?: string }).filter((b) => b.action === 'subscribe');
+    expect(subscribed.at(-1)?.plan).toBe('study.pro.monthly');
+  });
 
-test('the plan shows all at once: Chip’s loader, then the price and the button together', async ({ page }) => {
-  const m = new MockBackend({ payOn: true, payStatus: 2000 });
-  await m.install(page);
-  const seen = await watchPlan(page);
-  await page.goto('/app/plan');
-  const loader = page.getByRole('status').filter({ hasText: 'Opening your plan' });
-  await expect(loader).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Go Pro for $7.99 a month' })).toBeVisible();
-  await expect(loader).toHaveCount(0);
-  expect(await seen()).toEqual(['loader', 'price + button']);
-  // Asked once a visit: back on the plan, it's all there from the start, and nothing is asked again.
-  await page.getByRole('link', { name: 'Your desk' }).click();
-  await expect(page).toHaveURL(/\/app$/);
-  await page.getByRole('link', { name: 'Pro', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Go Pro for $7.99 a month' })).toBeVisible();
-  expect(await seen()).toEqual(['loader', 'price + button']);
-  expect(statusChecks(m)).toBe(1);
-});
+  test('on the student plan: Pro, with the student plan’s limits', async ({ page }) => {
+    const m = new MockBackend({ tier: 'pro', plan: 'student', student: true });
+    await m.install(page);
+    await page.goto('/app/plan');
+    await expect(page.getByText('Current')).toBeVisible();
+    await expect(page.getByText('Student price')).toBeVisible();
+    await expect(page.getByText(/about 110 in-depth messages a month/)).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Cancel Pro' })).toBeVisible();
+  });
 
-test('when the check for Pro never answers, the plan stops waiting and says Pro is coming soon', async ({ page }) => {
-  const m = new MockBackend({ payOn: true, payStatus: 'never' });
-  await m.install(page);
-  await page.goto('/app/plan');
-  await expect(page.getByRole('status').filter({ hasText: 'Opening your plan' })).toBeVisible();
-  await expect(page.getByText('Coming soon')).toBeVisible({ timeout: 10_000 });
-  await expect(page.getByText('$7.99', { exact: true })).toBeVisible();
-  await expect(page.getByRole('button', { name: /Go Pro/ })).toHaveCount(0);
-});
+  /** Keeps what the plan page has shown, in order, from the first thing on it: Chip's loader, the
+   * Pro price, the button to pay. */
+  async function watchPlan(page: Page) {
+    await page.addInitScript(() => {
+      const seen: string[] = [];
+      Object.assign(window, { planSeen: seen });
+      new MutationObserver(() => {
+        const text = document.querySelector('main')?.textContent ?? '';
+        const now = [text.includes('Opening your plan') && 'loader', text.includes('$7.99') && 'price', text.includes('Go Pro for') && 'button'].filter(Boolean).join(' + ');
+        if (now && now !== seen.at(-1)) seen.push(now);
+      }).observe(document, { childList: true, subtree: true, characterData: true });
+    });
+    return () => page.evaluate(() => (window as unknown as { planSeen: string[] }).planSeen);
+  }
 
-test('a check for Pro that failed is asked again the next time the plan opens', async ({ page }) => {
-  const m = new MockBackend({ payOn: true, payStatus: 'error' });
-  await m.install(page);
-  await page.goto('/app/plan');
-  await expect(page.getByText('Coming soon')).toBeVisible();
-  const before = statusChecks(m);
-  m.opts.payStatus = undefined;
-  await page.getByRole('link', { name: 'Your desk' }).click();
-  await expect(page).toHaveURL(/\/app$/);
-  await page.getByRole('link', { name: 'Pro', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Go Pro for $7.99 a month' })).toBeVisible();
-  expect(statusChecks(m)).toBe(before + 1);
+  const statusChecks = (m: MockBackend) => m.made('/functions/v1/web-pay', 'POST').filter((r) => (r.body as { action: string }).action === 'status').length;
+
+  test('the plan shows all at once: Chip’s loader, then the price and the button together', async ({ page }) => {
+    const m = new MockBackend({ payOn: true, payStatus: 2000 });
+    await m.install(page);
+    const seen = await watchPlan(page);
+    await page.goto('/app/plan');
+    const loader = page.getByRole('status').filter({ hasText: 'Opening your plan' });
+    await expect(loader).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Go Pro for $7.99 a month' })).toBeVisible();
+    await expect(loader).toHaveCount(0);
+    expect(await seen()).toEqual(['loader', 'price + button']);
+    // Asked once a visit: back on the plan, it's all there from the start, and nothing is asked again.
+    await page.getByRole('link', { name: 'Your desk' }).click();
+    await expect(page).toHaveURL(/\/app$/);
+    await page.getByRole('link', { name: 'Pro', exact: true }).click();
+    await expect(page.getByRole('button', { name: 'Go Pro for $7.99 a month' })).toBeVisible();
+    expect(await seen()).toEqual(['loader', 'price + button']);
+    expect(statusChecks(m)).toBe(1);
+  });
+
+  test('when the check for Pro never answers, the plan stops waiting and says Pro is coming soon', async ({ page }) => {
+    const m = new MockBackend({ payOn: true, payStatus: 'never' });
+    await m.install(page);
+    await page.goto('/app/plan');
+    await expect(page.getByRole('status').filter({ hasText: 'Opening your plan' })).toBeVisible();
+    await expect(page.getByText('Coming soon')).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText('$7.99', { exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: /Go Pro/ })).toHaveCount(0);
+  });
+
+  test('a check for Pro that failed is asked again the next time the plan opens', async ({ page }) => {
+    const m = new MockBackend({ payOn: true, payStatus: 'error' });
+    await m.install(page);
+    await page.goto('/app/plan');
+    await expect(page.getByText('Coming soon')).toBeVisible();
+    const before = statusChecks(m);
+    m.opts.payStatus = undefined;
+    await page.getByRole('link', { name: 'Your desk' }).click();
+    await expect(page).toHaveURL(/\/app$/);
+    await page.getByRole('link', { name: 'Pro', exact: true }).click();
+    await expect(page.getByRole('button', { name: 'Go Pro for $7.99 a month' })).toBeVisible();
+    expect(statusChecks(m)).toBe(before + 1);
+  });
 });
 
 test('writing saves as you go, and is there after a reload', async ({ page }) => {

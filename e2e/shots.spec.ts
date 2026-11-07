@@ -143,3 +143,159 @@ test('something to learn, with Chip guiding', async ({ page }, info) => {
   await noSideScroll(page);
   await page.screenshot({ path: dir('topic-guide', info.project.name) });
 });
+
+// ── Institutions ──────────────────────────────────────────────────────
+
+test('institutions page', async ({ page }, info) => {
+  test.setTimeout(120_000);
+  const m = new MockBackend();
+  await m.install(page, { signedIn: false });
+  await page.goto('/institutions');
+  await expect(page.getByRole('heading', { level: 1 })).toContainText('Learning with AI');
+  await page.waitForTimeout(1600);
+  await noSideScroll(page);
+  await page.screenshot({ path: dir('institutions-top', info.project.name) });
+  for (const id of ['why', 'get', 'privacy', 'pilot', 'faq']) {
+    await page.locator(`#${id}`).scrollIntoViewIfNeeded();
+    await page.evaluate((x) => document.getElementById(x)?.scrollIntoView({ block: 'start', behavior: 'instant' }), id);
+    await page.waitForTimeout(1200);
+    await noSideScroll(page);
+    await page.screenshot({ path: dir(`institutions-${id}`, info.project.name) });
+  }
+});
+
+test('registering an institution', async ({ page }, info) => {
+  const m = new MockBackend();
+  await m.install(page);
+  await page.goto('/app/institutions/new');
+  await expect(page.getByRole('heading', { name: 'Register your institution' })).toBeVisible();
+  await page.waitForTimeout(500);
+  await noSideScroll(page);
+  await page.screenshot({ path: dir('institution-register', info.project.name), fullPage: true });
+});
+
+test('an institution’s dashboard', async ({ page }, info) => {
+  test.setTimeout(120_000);
+  const m = new MockBackend();
+  const { inst } = m.inst.seedSchool();
+  m.inst.invite(inst.id, 'waiting@lagosbay.edu.ng', 'student', m.inst.classes[0].id);
+  await m.install(page);
+  await page.goto(`/app/institution/${inst.id}`);
+  await expect(page.getByRole('heading', { name: 'Study time, week by week' })).toBeVisible();
+  await page.waitForTimeout(900);
+  await noSideScroll(page);
+  await page.screenshot({ path: dir('institution-overview', info.project.name), fullPage: true });
+
+  await page.getByRole('tab', { name: 'Students' }).click();
+  await expect(page.getByText('Grace Hopper').filter({ visible: true }).first()).toBeVisible();
+  await page.waitForTimeout(400);
+  await noSideScroll(page);
+  await page.screenshot({ path: dir('institution-students', info.project.name), fullPage: true });
+  await page.getByRole('button', { name: 'Open Grace Hopper', exact: true }).filter({ visible: true }).click();
+  await expect(page.getByRole('dialog').getByText('AI-use record').first()).toBeVisible();
+  await page.waitForTimeout(500);
+  await noSideScroll(page);
+  await page.screenshot({ path: dir('institution-student', info.project.name) });
+  await page.keyboard.press('Escape');
+
+  await page.getByRole('tab', { name: 'Classes' }).click();
+  await expect(page.getByText('K7Q2MD')).toBeVisible();
+  await page.waitForTimeout(400);
+  await noSideScroll(page);
+  await page.screenshot({ path: dir('institution-classes', info.project.name), fullPage: true });
+  await page.getByLabel('New class').fill('Chemistry 201');
+  await page.getByRole('button', { name: 'Make class' }).click();
+  await expect(page.getByRole('dialog', { name: 'Your class is ready' })).toBeVisible();
+  await page.waitForTimeout(500);
+  await noSideScroll(page);
+  await page.screenshot({ path: dir('institution-class-made', info.project.name) });
+  await page.keyboard.press('Escape');
+
+  await page.getByRole('tab', { name: 'Invite' }).click();
+  await page.getByRole('textbox', { name: 'Emails' }).fill('ada.long.name@lagosbay.edu.ng\ngrace@lagosbay.edu.ng\nnew2@lagosbay.edu.ng, oops.lagosbay.edu.ng');
+  await page.getByRole('button', { name: /Make \d invite links?/ }).click();
+  await expect(page.getByRole('heading', { name: /links? ready/ })).toBeVisible();
+  await page.waitForTimeout(500);
+  await noSideScroll(page);
+  await page.screenshot({ path: dir('institution-invite', info.project.name), fullPage: true });
+
+  await page.getByRole('tab', { name: 'Settings' }).click();
+  await expect(page.getByRole('button', { name: 'Save changes' })).toBeVisible();
+  await page.waitForTimeout(400);
+  await noSideScroll(page);
+  await page.screenshot({ path: dir('institution-settings', info.project.name), fullPage: true });
+});
+
+test('a pending institution', async ({ page }, info) => {
+  const m = new MockBackend();
+  const inst = m.inst.seed({ status: 'pending', seats: 0, pilot_ends: null }, 'admin');
+  await m.install(page);
+  await page.goto(`/app/institution/${inst.id}`);
+  await expect(page.getByText(/Kaivon is checking/)).toBeVisible();
+  await page.waitForTimeout(600);
+  await noSideScroll(page);
+  await page.screenshot({ path: dir('institution-pending', info.project.name), fullPage: true });
+});
+
+test('joining: an invite link, a class code and a school email', async ({ page }, info) => {
+  const m = new MockBackend();
+  const inst = m.inst.seed({ email_domain: 'school.edu' }, null);
+  const bio = m.inst.klass(inst.id, 'Biology 101', 'K7Q2MD');
+  const invite = m.inst.invite(inst.id, m.user.email, 'student', bio.id);
+  await m.install(page);
+  await page.goto(`/join/${invite.token}`);
+  await expect(page.getByRole('heading', { name: 'Join Lagos Bay University' })).toBeVisible();
+  await page.waitForTimeout(500);
+  await noSideScroll(page);
+  await page.screenshot({ path: dir('join-invite', info.project.name), fullPage: true });
+
+  await page.goto('/app');
+  await expect(page.getByRole('region', { name: 'Your school is on Chip Study' })).toBeVisible();
+  await page.waitForTimeout(900);
+  await noSideScroll(page);
+  await page.screenshot({ path: dir('join-school-card', info.project.name) });
+  await page.getByRole('button', { name: 'Join a class' }).click();
+  await page.getByLabel('Class code').fill('K7Q2MD');
+  await page.getByRole('button', { name: 'Next' }).click();
+  await expect(page.getByRole('dialog', { name: 'Join Biology 101?' })).toBeVisible();
+  await page.waitForTimeout(500);
+  await noSideScroll(page);
+  await page.screenshot({ path: dir('join-class', info.project.name) });
+});
+
+test('settings and the plan, with an institution', async ({ page }, info) => {
+  const m = new MockBackend();
+  const inst = m.inst.seed({}, 'student');
+  const bio = m.inst.klass(inst.id, 'Biology 101');
+  m.inst.inClass(bio.id, m.user.id, 'student');
+  await m.install(page);
+  await page.goto('/app/settings');
+  await expect(page.locator('#institution').getByText('Biology 101')).toBeVisible();
+  await page.locator('#institution').scrollIntoViewIfNeeded();
+  await page.waitForTimeout(400);
+  await noSideScroll(page);
+  await page.screenshot({ path: dir('settings-institution', info.project.name) });
+  await page.goto('/app/plan');
+  await expect(page.getByText(/with nothing to pay/)).toBeVisible();
+  await page.waitForTimeout(400);
+  await noSideScroll(page);
+  await page.screenshot({ path: dir('plan-institution', info.project.name), fullPage: true });
+});
+
+test('Kaivon review', async ({ page }, info) => {
+  const m = new MockBackend();
+  m.inst.staff.add(m.user.id);
+  m.inst.seed({ name: 'Harbour College', kind: 'college', country: 'GB', status: 'pending', seats: 0, pilot_ends: null, reviewed_at: null, domain_requested: 'harbour.ac.uk', contact_name: 'Femi Ade', contact_role: 'Registrar', students_estimate: 800 }, null);
+  m.inst.seed({ name: 'St Anne’s Secondary School', kind: 'school', status: 'pending', seats: 0, pilot_ends: null, reviewed_at: null, domain_requested: '', website: '' }, null);
+  await m.install(page);
+  await page.goto('/app/kaivon');
+  await expect(page.getByRole('heading', { name: 'Harbour College' })).toBeVisible();
+  await page.waitForTimeout(500);
+  await noSideScroll(page);
+  await page.screenshot({ path: dir('kaivon-review', info.project.name), fullPage: true });
+  await page.getByRole('listitem').filter({ hasText: 'Harbour College' }).getByRole('button', { name: 'Approve' }).click();
+  await expect(page.getByRole('dialog', { name: 'Approve Harbour College' })).toBeVisible();
+  await page.waitForTimeout(500);
+  await noSideScroll(page);
+  await page.screenshot({ path: dir('kaivon-approve', info.project.name) });
+});

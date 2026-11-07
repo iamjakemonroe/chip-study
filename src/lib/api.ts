@@ -1,19 +1,36 @@
 import { supabase } from './supabase.ts';
 import { CURRENCY } from './currency.ts';
+import { institutionError } from './institutions.ts';
 import type {
   Assignment,
   Card,
   DocKind,
   FocusSession,
+  InstitutionDetails,
+  InstitutionKind,
+  InstitutionMember,
+  InstitutionOverview,
+  InstitutionRole,
+  InstitutionStatus,
+  InvitePeek,
+  InviteResult,
   LogEntry,
   Me,
   Message,
+  ClassPeek,
+  MyClass,
+  MyInstitution,
   Note,
+  OpenInvite,
   Practice,
   Source,
   SourceData,
   SourceKind,
+  StaffInstitution,
+  StudentDetail,
+  StudyClass,
   StudyDocument,
+  SuggestedInstitution,
   Task,
   Thread,
 } from './types.ts';
@@ -21,7 +38,15 @@ import type {
 /** Everything Chip Study reads and writes, in one place. Rows are the student's own (row level
  * security); Chip's side comes from the chip-study function. */
 
-class ApiError extends Error {}
+/** A request that didn't work: [message] is for people, [raw] is what the server said. */
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    public raw = '',
+  ) {
+    super(message);
+  }
+}
 
 function check<T>(result: { data: T; error: { message: string } | null }, what: string): T {
   if (result.error) {
@@ -377,4 +402,202 @@ export async function cancelPro(): Promise<{ status: string; until: string | nul
   const { data, error } = await supabase.functions.invoke('web-pay', { body: { action: 'cancel', product: 'study_pro' } });
   if (error || !data) throw new ApiError('Couldn’t cancel just now. Try again.');
   return { status: String(data.status), until: typeof data.until === 'string' ? data.until : null };
+}
+
+// ── Institutions ──────────────────────────────────────────────────────
+// Schools, colleges and universities. Everything goes through the study_institution* and
+// study_class* functions (the tables can't be read directly), and their errors are sentences.
+
+function inst<T>(result: { data: unknown; error: { message: string } | null }, fallback: string): T {
+  if (result.error) {
+    console.warn(fallback, result.error.message);
+    throw new ApiError(institutionError(result.error.message, fallback), result.error.message);
+  }
+  return result.data as T;
+}
+
+/** Whether [e] is the server saying this account may not do that. */
+export function notAllowed(e: unknown): boolean {
+  return e instanceof ApiError && /not allowed/.test(e.raw);
+}
+
+export async function myInstitutions(): Promise<{ mine: MyInstitution[]; suggested: SuggestedInstitution[] }> {
+  const d = inst<{ mine?: MyInstitution[]; suggested?: SuggestedInstitution[] } | null>(await supabase.rpc('study_my_institutions'), 'Couldn’t load your institutions just now.');
+  return { mine: d?.mine ?? [], suggested: d?.suggested ?? [] };
+}
+
+export interface NewInstitution {
+  name: string;
+  country: string;
+  kind: InstitutionKind;
+  website: string;
+  domain: string;
+  contactName: string;
+  contactRole: string;
+  students: number | null;
+  /** Students under 18 will join, and it has their parents' or guardians' consent (a school must). */
+  minorsConsent: boolean;
+}
+
+/** Registers an institution (it waits for Kaivon to check it), with you as its first admin. */
+export async function registerInstitution(f: NewInstitution): Promise<string> {
+  return inst<string>(
+    await supabase.rpc('study_institution_register', {
+      p_name: f.name,
+      p_country: f.country,
+      p_kind: f.kind,
+      p_website: f.website,
+      p_email_domain: f.domain,
+      p_contact_name: f.contactName,
+      p_contact_role: f.contactRole,
+      p_students_estimate: f.students,
+      p_minors_consent: f.minorsConsent,
+    }),
+    'Couldn’t send that just now. Try again.',
+  );
+}
+
+export async function institutionOverview(id: string): Promise<InstitutionOverview> {
+  return inst<InstitutionOverview>(await supabase.rpc('study_institution_overview', { p_inst: id }), 'Couldn’t load this institution just now.');
+}
+
+export async function institutionMembers(id: string, classId: string | null = null): Promise<InstitutionMember[]> {
+  const rows = inst<InstitutionMember[] | null>(await supabase.rpc('study_institution_students', { p_inst: id, p_class: classId }), 'Couldn’t load the students just now.');
+  return (rows ?? []).map((r) => ({ ...r, classes: r.classes ?? [] }));
+}
+
+export async function institutionStudent(id: string, userId: string): Promise<StudentDetail> {
+  const d = inst<StudentDetail>(await supabase.rpc('study_institution_student', { p_inst: id, p_user: userId }), 'Couldn’t load that student just now.');
+  return { student: d?.student ?? null, assignments: d?.assignments ?? [] };
+}
+
+/** Invite links for [emails] (up to 500 at a time): each email's link, or why there isn't one. */
+export async function inviteToInstitution(id: string, emails: string[], role: InstitutionRole, classId: string | null): Promise<InviteResult[]> {
+  return (
+    inst<InviteResult[] | null>(
+      await supabase.rpc('study_institution_invite', { p_inst: id, p_emails: emails, p_role: role, p_class: classId }),
+      'Couldn’t make those links just now. Try again.',
+    ) ?? []
+  );
+}
+
+/** The invite links still waiting to be used: all of them for an admin, a teacher's own classes'. */
+export async function openInvites(id: string): Promise<OpenInvite[]> {
+  return inst<OpenInvite[] | null>(await supabase.rpc('study_institution_invites_list', { p_inst: id }), 'Couldn’t load the invites just now.') ?? [];
+}
+
+export async function revokeInvite(token: string): Promise<void> {
+  inst(await supabase.rpc('study_invite_revoke', { p_token: token }), 'Couldn’t cancel that link just now.');
+}
+
+export async function peekInvite(token: string): Promise<InvitePeek> {
+  return inst<InvitePeek>(await supabase.rpc('study_invite_peek', { p_token: token }), 'Couldn’t open that invite just now.');
+}
+
+export async function acceptInvite(token: string): Promise<{ institution_id: string; name: string; role: InstitutionRole }> {
+  return inst(await supabase.rpc('study_invite_accept', { p_token: token }), 'Couldn’t join just now. Try again.');
+}
+
+/** Joins as a student by school email, once Kaivon has confirmed the institution's domain. */
+export async function joinByEmail(id: string): Promise<{ institution_id: string; name: string }> {
+  return inst(await supabase.rpc('study_institution_join_by_email', { p_inst: id }), 'Couldn’t join just now. Try again.');
+}
+
+export async function createClass(id: string, name: string): Promise<{ id: string; name: string; code: string }> {
+  return inst(await supabase.rpc('study_class_create', { p_inst: id, p_name: name }), 'Couldn’t make that class just now.');
+}
+
+export async function listClasses(id: string): Promise<StudyClass[]> {
+  const rows = inst<StudyClass[] | null>(await supabase.rpc('study_classes_list', { p_inst: id }), 'Couldn’t load the classes just now.');
+  return (rows ?? []).map((c) => ({ ...c, teachers: c.teachers ?? [], students: Number(c.students ?? 0) }));
+}
+
+export async function updateClass(classId: string, patch: { name?: string; archived?: boolean }): Promise<void> {
+  inst(await supabase.rpc('study_class_update', { p_class: classId, p_name: patch.name ?? null, p_archived: patch.archived ?? null }), 'Couldn’t save that class just now.');
+}
+
+/** Puts [userId] in a class as a teacher or a student, or takes them out (null). */
+export async function setClassMember(classId: string, userId: string, role: 'teacher' | 'student' | null): Promise<void> {
+  inst(await supabase.rpc('study_class_member_set', { p_class: classId, p_user: userId, p_role: role }), 'Couldn’t change that class just now.');
+}
+
+/** What a class code is (its class and institution), before joining it. */
+export async function peekClass(code: string): Promise<ClassPeek> {
+  return inst<ClassPeek>(await supabase.rpc('study_class_peek', { p_code: code }), 'Couldn’t check that code just now.');
+}
+
+/** The classes you study in (at active institutions). */
+export async function myClasses(): Promise<MyClass[]> {
+  return inst<MyClass[] | null>(await supabase.rpc('study_my_classes'), 'Couldn’t load your classes just now.') ?? [];
+}
+
+/** Joins a class (and its institution, as a student) with its code. */
+export async function joinClass(code: string): Promise<{ institution_id: string; class: string; name: string }> {
+  return inst(await supabase.rpc('study_class_join', { p_code: code }), 'Couldn’t join that class just now.');
+}
+
+export async function updateInstitution(
+  id: string,
+  patch: Partial<Pick<InstitutionDetails, 'name' | 'website' | 'contact_name' | 'contact_role' | 'domain_requested'>>,
+): Promise<void> {
+  inst(
+    await supabase.rpc('study_institution_update', {
+      p_inst: id,
+      p_name: patch.name ?? null,
+      p_website: patch.website ?? null,
+      p_contact_name: patch.contact_name ?? null,
+      p_contact_role: patch.contact_role ?? null,
+      p_domain_requested: patch.domain_requested ?? null,
+    }),
+    'Couldn’t save that just now.',
+  );
+}
+
+/** Changes a member's role, or takes them out of the institution (null). */
+export async function setInstitutionMember(id: string, userId: string, role: InstitutionRole | null): Promise<void> {
+  inst(await supabase.rpc('study_institution_member_set', { p_inst: id, p_user: userId, p_role: role }), 'Couldn’t change that just now.');
+}
+
+export async function leaveInstitution(id: string): Promise<void> {
+  inst(await supabase.rpc('study_institution_leave', { p_inst: id }), 'Couldn’t leave just now. Try again.');
+}
+
+// Kaivon's review of institutions (staff only: everyone else is told 'not allowed').
+
+/** Whether this account is Kaivon staff. */
+export async function amStaff(): Promise<boolean> {
+  return !!inst<boolean>(await supabase.rpc('study_am_staff'), 'Couldn’t check that just now.');
+}
+
+export async function staffInstitutions(status: InstitutionStatus | 'all'): Promise<StaffInstitution[]> {
+  return inst<StaffInstitution[] | null>(await supabase.rpc('study_staff_institutions', { p_status: status }), 'Couldn’t load the institutions just now.') ?? [];
+}
+
+export interface Review {
+  status: 'approved' | 'rejected' | 'suspended' | 'pending';
+  seats?: number | null;
+  pilotDays?: number | null;
+  emailDomain?: string | null;
+  note?: string | null;
+  plan?: 'pilot' | 'paid' | null;
+  paidUntil?: string | null;
+  /** Takes the confirmed email domain away. */
+  clearDomain?: boolean;
+}
+
+export async function staffReview(id: string, r: Review): Promise<void> {
+  inst(
+    await supabase.rpc('study_staff_review', {
+      p_inst: id,
+      p_status: r.status,
+      p_seats: r.seats ?? null,
+      p_pilot_days: r.pilotDays ?? null,
+      p_email_domain: r.emailDomain ?? null,
+      p_note: r.note ?? null,
+      p_plan: r.plan ?? null,
+      p_paid_until: r.paidUntil ?? null,
+      p_clear_domain: !!r.clearDomain,
+    }),
+    'Couldn’t save that review just now.',
+  );
 }

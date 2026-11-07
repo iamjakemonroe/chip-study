@@ -191,3 +191,179 @@ export interface Me {
   prices?: Record<string, number> | null;
   student_prices?: Record<string, number> | null;
 }
+
+// ── Institutions (schools, colleges and universities) ────────────────────
+
+export type InstitutionKind = 'university' | 'college' | 'school' | 'other';
+export type InstitutionStatus = 'pending' | 'approved' | 'rejected' | 'suspended';
+export type InstitutionRole = 'admin' | 'teacher' | 'student';
+export type InstitutionPlan = 'pilot' | 'paid';
+
+/** An institution you're in (study_my_institutions().mine). */
+export interface MyInstitution {
+  id: string;
+  name: string;
+  kind: InstitutionKind;
+  country: string;
+  status: InstitutionStatus;
+  role: InstitutionRole;
+  plan: InstitutionPlan;
+  /** Approved, and inside its pilot or paid period: its students have Pro. */
+  active: boolean;
+  seats: number;
+  students: number;
+  pilot_ends: string | null;
+  paid_until: string | null;
+  joined_at: string;
+}
+
+/** An active institution whose confirmed email domain is yours, that you aren't in yet. */
+export interface SuggestedInstitution {
+  id: string;
+  name: string;
+  kind: InstitutionKind;
+  country: string;
+}
+
+export interface InstitutionDetails {
+  id: string;
+  name: string;
+  kind: InstitutionKind;
+  country: string;
+  website: string;
+  status: InstitutionStatus;
+  plan: InstitutionPlan;
+  active: boolean;
+  seats: number;
+  pilot_ends: string | null;
+  paid_until: string | null;
+  /** Set by Kaivon at review: anyone with this email domain can join as a student. */
+  email_domain: string | null;
+  domain_requested: string;
+  contact_name: string;
+  contact_role: string;
+  review_note: string;
+  created_at: string;
+}
+
+export interface InstitutionOverview {
+  role: 'admin' | 'teacher';
+  institution: InstitutionDetails;
+  counts: { students: number; visible_students: number; teachers: number; admins: number; classes: number; invites_open: number };
+  /** The last seven days, for the students this viewer can see. */
+  week: { active_students: number; focus_minutes: number; practice_sessions: number; practice_score: number | null; chip_asks: number; ai_records: number };
+  /** Eight weeks, oldest first. */
+  weeks: { week: string; active: number; minutes: number }[];
+}
+
+/** A row of study_institution_students: a member, with the last 30 days in numbers. */
+export interface InstitutionMember {
+  user_id: string;
+  name: string;
+  email: string;
+  role: InstitutionRole;
+  classes: string[];
+  joined_at: string;
+  last_active: string | null;
+  minutes_30d: number;
+  practice_score_30d: number | null;
+  asks_30d: number;
+  assignments: number;
+  ai_records: number;
+}
+
+/** One student, for their admin or teacher. Never chats, notes or documents. */
+export interface StudentDetail {
+  student: { user_id: string; name: string; email: string; joined_at: string } | null;
+  assignments: {
+    id: string;
+    title: string;
+    course: string;
+    kind: 'topic' | 'assignment';
+    status: 'active' | 'submitted' | 'archived';
+    due_at: string | null;
+    words: number;
+    updated: string;
+    focus_minutes: number;
+    practice: { sessions: number; score: number | null };
+    ai_use: { action: LogAction; summary: string; words: number; at: string }[];
+  }[];
+}
+
+export interface InviteResult {
+  email: string;
+  token: string | null;
+  status: 'invited' | 'invalid' | 'member';
+}
+
+export interface InvitePeek {
+  status: 'open' | 'used' | 'expired' | 'revoked' | 'unknown';
+  institution?: string;
+  role?: InstitutionRole;
+  class?: string | null;
+  email_matches?: boolean;
+}
+
+export interface StudyClass {
+  id: string;
+  name: string;
+  code: string;
+  archived: boolean;
+  created_at: string;
+  teachers: { user_id: string; name: string }[];
+  students: number;
+}
+
+/** An institution as Kaivon's staff see it, to review. */
+export interface StaffInstitution {
+  id: string;
+  name: string;
+  kind: InstitutionKind;
+  country: string;
+  website: string;
+  domain_requested: string;
+  email_domain: string | null;
+  contact_name: string;
+  contact_role: string;
+  contact_email: string | null;
+  students_estimate: number | null;
+  status: InstitutionStatus;
+  plan: InstitutionPlan;
+  seats: number;
+  students: number;
+  pilot_ends: string | null;
+  paid_until: string | null;
+  review_note: string;
+  created_at: string;
+  reviewed_at: string | null;
+}
+
+/** What a class code is, before joining (study_class_peek). */
+export interface ClassPeek {
+  found: boolean;
+  class?: string;
+  institution?: string;
+  /** Whether its institution is open to students now. */
+  active?: boolean;
+  /** Your role at its institution already, if any. */
+  member?: InstitutionRole | null;
+}
+
+/** An invite link still waiting to be used (study_institution_invites_list). */
+export interface OpenInvite {
+  email: string;
+  role: InstitutionRole;
+  token: string;
+  class: string | null;
+  class_id: string | null;
+  created_at: string;
+  expires_at: string;
+}
+
+/** A class you study in (study_my_classes). */
+export interface MyClass {
+  id: string;
+  name: string;
+  institution: string;
+  help_level: 'guide' | 'explain' | 'hints';
+}

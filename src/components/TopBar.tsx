@@ -1,9 +1,10 @@
-import { CreditCard, FileText, LogOut, Pause, Play, Settings as SettingsIcon, Shield, Timer } from 'lucide-react';
+import { Building2, CreditCard, FileText, LogOut, Pause, Play, Settings as SettingsIcon, Shield, ShieldCheck, Timer } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Link, NavLink, useNavigate } from 'react-router';
 import { chipTime, describe } from '../lib/allowance.ts';
 import { useAuth } from '../store/auth.ts';
 import { clock, remaining, useFocus } from '../store/focus.ts';
+import { useInstitutions } from '../store/institutions.ts';
 import { Logo } from './Logo.tsx';
 import { SignOutConfirm } from './SignOut.tsx';
 import { Menu, MenuItem, Ring } from './ui.tsx';
@@ -15,6 +16,13 @@ export function TopBar() {
   const email = useAuth((s) => s.session?.user.email ?? '');
   const me = useAuth((s) => s.me);
   const initial = (me?.name || email || '?').trim()[0]?.toUpperCase() ?? '?';
+  // Institutions you run or teach at, and Kaivon's review for staff: in the menu, only for them.
+  const mine = useInstitutions((s) => s.mine);
+  const staff = useInstitutions((s) => s.staff);
+  const running = (mine ?? []).filter((m) => m.role !== 'student');
+  useEffect(() => {
+    void useInstitutions.getState().load();
+  }, []);
 
   return (
     <header className="sticky top-0 z-40 border-b border-white/60 bg-[rgb(247_247_251/0.75)] backdrop-blur-xl">
@@ -58,6 +66,17 @@ export function TopBar() {
                   <p className="truncate text-xs text-ink-3">{email}</p>
                 </div>
                 <div className="my-1 h-px bg-line" />
+                {running.map((m) => (
+                  <MenuItem key={m.id} icon={<Building2 size={15} />} onClick={() => (close(), navigate(`/app/institution/${m.id}`))}>
+                    <span className="block max-w-[14rem] truncate">{m.name}</span>
+                  </MenuItem>
+                ))}
+                {staff && (
+                  <MenuItem icon={<ShieldCheck size={15} />} onClick={() => (close(), navigate('/app/kaivon'))}>
+                    Kaivon review
+                  </MenuItem>
+                )}
+                {(running.length > 0 || staff) && <div className="my-1 h-px bg-line" />}
                 <MenuItem icon={<CreditCard size={15} />} onClick={() => (close(), navigate('/app/plan'))}>
                   {me?.tier === 'pro' ? 'Your Pro plan' : 'Plan & Chip time'}
                 </MenuItem>
