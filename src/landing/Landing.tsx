@@ -696,6 +696,7 @@ const FAQ = [
   ['Is my work private?', 'Your notes, documents, cards and chats are yours alone. We don’t sell your data or show ads. You can delete anything, or all your study data, at any time.'],
   ['Is there a student discount?', `Yes. Students get Pro for ${money(fromUsd(site.studentPrice))} a month instead of ${money(fromUsd(site.price))}. Sign up with your school email (${SCHOOL_EMAILS}) and the Plan page shows the student price. It’s everything in Pro, with a little less of Chip’s best model: about 110 in-depth messages a month instead of 150.`],
   ['What happens when I run out of Chip time?', 'Everything else keeps working: your notes, editor, review deck, timer and record. Chip’s time comes back the next day. Pro gives you much more, and Chip’s best model.'],
+  ['Can I study with friends?', 'Yes. Open a study room on any assignment or topic and share the link. Everyone edits the same work at once, with video, chat and one shared Chip, and nothing is recorded. Free rooms take up to 4 people for an hour; Pro rooms take 10, with no time limit. Personal rooms are for people 18 and over. Schools can open class rooms for up to 50.'],
   ['Does it work on my phone and iPad?', 'Yes. Chip Study is made for phones, tablets and laptops alike, and you can install it like an app from your browser.'],
 ];
 

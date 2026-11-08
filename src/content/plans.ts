@@ -5,6 +5,7 @@ export const FREE_FEATURES = [
   'A review deck with spaced review, and your progress',
   'The editor, citations, focus timer, code and tables',
   'An AI-use record and a declaration for assignments',
+  'Study rooms with friends: up to 4 people for 60 minutes (18 and over)',
 ];
 
 export const PRO_FEATURES = [
@@ -12,20 +13,21 @@ export const PRO_FEATURES = [
   'About 45 quick messages a day on top, with Chip Fast',
   'Web research: real sources, with links',
   'Bigger files (20 MB), up to 10 at a time, and 30 readings a day',
+  'Study rooms for up to 10 people, with no time limit',
   'Everything in Free',
 ];
 
 /** The student plan: Pro, 25% off, for an account made with a school email. */
 export const STUDENT_FEATURES = [
   'Chip’s best model (Claude Opus): about 110 in-depth messages a month, up to 15 a day',
-  'Everything else in Pro: Chip Fast on top, web research, bigger files and more readings',
+  'Everything else in Pro: Chip Fast on top, web research, bigger files, more readings and rooms of 10',
   'For an account made with your school email',
 ];
 
 /** Pro through an institution: every Pro feature, a little less of Chip's best model. */
 export const INSTITUTION_FEATURES = [
   'Chip’s best model (Claude Opus) for deep tutoring and feedback, a little less of it than personal Pro',
-  'Everything else in Pro: Chip Fast on top, web research, bigger files and more readings',
+  'Everything else in Pro: Chip Fast on top, web research, bigger files, more readings and rooms of 10',
   'Through your institution, with nothing to pay',
 ];
 

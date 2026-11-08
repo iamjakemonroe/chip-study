@@ -45,6 +45,8 @@ interface WorkspaceState {
   focusMode: boolean;
   /** The lecturer's version of Chip, when the assignment is linked to a class. */
   tutor: ClassTutor | null;
+  /** The study room this workspace is shared in (its ID), or null when it's your own. */
+  room: string | null;
   set: (patch: Partial<WorkspaceState>) => void;
   reset: () => void;
 }
@@ -70,6 +72,7 @@ const empty = {
   panel: null,
   focusMode: false,
   tutor: null as ClassTutor | null,
+  room: null as string | null,
 };
 
 export const useWorkspace = create<WorkspaceState>((set) => ({

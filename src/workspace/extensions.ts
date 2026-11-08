@@ -53,11 +53,15 @@ export const Citation = Node.create({
   },
 });
 
-export function extensions(opts: { onMath: (kind: 'inline' | 'block', latex: string, pos: number) => void }) {
+/** The editor's extensions. With [shared] (a study room), the room's collaboration binding keeps
+ * the history, and nothing adds to the document by itself (a trailing paragraph added on every
+ * screen at once would be added once per person). */
+export function extensions(opts: { onMath: (kind: 'inline' | 'block', latex: string, pos: number) => void; shared?: boolean }) {
   return [
     StarterKit.configure({
       heading: { levels: [1, 2, 3] },
       link: { openOnClick: false, autolink: true, defaultProtocol: 'https' },
+      ...(opts.shared ? { undoRedo: false as const, trailingNode: false as const } : {}),
     }),
     Placeholder.configure({
       placeholder: ({ node }) => (node.type.name === 'heading' ? 'Heading' : 'Start writing, or ask Chip to help you plan…'),

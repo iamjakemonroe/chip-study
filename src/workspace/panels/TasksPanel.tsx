@@ -1,20 +1,24 @@
 import { AnimatePresence, motion } from 'framer-motion';
 import { CalendarDays, Check, Flag, Plus, Sparkles, X } from 'lucide-react';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Ring } from '../../components/ui.tsx';
 import { addTasks, deleteTask, updateTask } from '../../lib/api.ts';
 import { dayLabel, daysBetween, dueLabel, fromDay } from '../../lib/dates.ts';
 import { TONE_STYLES } from '../../lib/colors.ts';
 import type { Task } from '../../lib/types.ts';
 import { toast } from '../../store/toast.ts';
+import { useRoomBinding } from '../roomBinding.ts';
 import { useWorkspace } from '../store.ts';
 
 const ease = [0.2, 0.7, 0.1, 1] as const;
 
-/** The plan: tasks on a timeline to the due date, ticked off as you go. */
+/** The plan: tasks on a timeline to the due date, ticked off as you go. In a study room it's the
+ * room's shared plan. */
 export function TasksPanel({ onPlan }: { onPlan: () => void }) {
   const assignment = useWorkspace((s) => s.assignment)!;
   const tasks = useWorkspace((s) => s.tasks);
+  const room = useRoomBinding();
+  const canEdit = room ? room.canEdit : true;
   const [title, setTitle] = useState('');
   const [due, setDue] = useState('');
   const [showDone, setShowDone] = useState(false);
@@ -41,6 +45,11 @@ export function TasksPanel({ onPlan }: { onPlan: () => void }) {
   const set = (patch: Partial<Task> & { id: string }) => useWorkspace.setState({ tasks: useWorkspace.getState().tasks.map((t) => (t.id === patch.id ? { ...t, ...patch } : t)) });
 
   const save = async (t: Task, patch: Partial<Pick<Task, 'title' | 'due_on' | 'done'>>) => {
+    if (room) {
+      // Titles merge from TaskRow; here: done and the date.
+      if (canEdit) room.lists.updateTask(t.id, { done: patch.done, due_on: patch.due_on });
+      return;
+    }
     set({ id: t.id, ...patch });
     try {
       const next = await updateTask(t.id, patch);
@@ -54,6 +63,12 @@ export function TasksPanel({ onPlan }: { onPlan: () => void }) {
   const add = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim()) return;
+    if (room) {
+      room.lists.addTasks([{ title: title.trim(), due: due || null }]);
+      setTitle('');
+      setDue('');
+      return;
+    }
     try {
       const [t] = await addTasks(assignment.id, [{ title: title.trim(), due: due || null }], 'me', tasks.length);
       useWorkspace.setState({ tasks: [...useWorkspace.getState().tasks, t] });
@@ -84,7 +99,7 @@ export function TasksPanel({ onPlan }: { onPlan: () => void }) {
       </div>
 
       <div className="scroll-soft min-h-0 flex-1 overflow-y-auto px-4 py-4">
-        <form onSubmit={add} className="flex gap-2">
+        <form onSubmit={add} className={`flex gap-2 ${canEdit ? '' : 'hidden'}`}>
           <input className="field h-10 flex-1 py-0" placeholder="Add a task…" value={title} onChange={(e) => setTitle(e.target.value)} aria-label="New task" />
           <label className="relative grid h-10 w-10 flex-none cursor-pointer place-items-center rounded-xl border border-line bg-white text-ink-3 hover:text-ink" title="Due date">
             <CalendarDays size={17} />
@@ -146,8 +161,13 @@ export function TasksPanel({ onPlan }: { onPlan: () => void }) {
 }
 
 function TaskRow({ task, onSave }: { task: Task; onSave: (t: Task, patch: Partial<Pick<Task, 'title' | 'due_on' | 'done'>>) => Promise<void> }) {
+  const room = useRoomBinding();
+  const canEdit = room ? room.canEdit : true;
   const [editing, setEditing] = useState(false);
   const [title, setTitle] = useState(task.title);
+  // In a room: the title as it was when you started changing it, so your change merges with anyone
+  // else's rather than writing over it.
+  const base = useRef(task.title);
   const d = dayLabel(task.due_on);
   return (
     <motion.li
@@ -164,6 +184,7 @@ function TaskRow({ task, onSave }: { task: Task; onSave: (t: Task, patch: Partia
         onClick={() => void onSave(task, { done: !task.done })}
         aria-label={task.done ? `Not done: ${task.title}` : `Done: ${task.title}`}
         aria-pressed={task.done}
+        disabled={!canEdit}
       >
         {task.done && <Check size={12} strokeWidth={3} />}
       </button>
@@ -175,7 +196,8 @@ function TaskRow({ task, onSave }: { task: Task; onSave: (t: Task, patch: Partia
           onChange={(e) => setTitle(e.target.value)}
           onBlur={() => {
             setEditing(false);
-            if (title.trim() && title.trim() !== task.title) void onSave(task, { title: title.trim() });
+            if (room && title.trim() && title.trim() !== base.current) room.lists.editTaskTitle(task.id, base.current, title.trim());
+            else if (!room && title.trim() && title.trim() !== task.title) void onSave(task, { title: title.trim() });
             else setTitle(task.title);
           }}
           onKeyDown={(e) => {
@@ -187,19 +209,20 @@ function TaskRow({ task, onSave }: { task: Task; onSave: (t: Task, patch: Partia
           }}
         />
       ) : (
-        <button className={`min-w-0 flex-1 text-left text-sm ${task.done ? 'text-ink-4 line-through' : 'text-ink'}`} onClick={() => setEditing(true)}>
+        <button className={`min-w-0 flex-1 text-left text-sm ${task.done ? 'text-ink-4 line-through' : 'text-ink'}`} onClick={() => canEdit && ((base.current = task.title), setTitle(task.title), setEditing(true))}>
           {task.title}
           {task.created_by === 'chip' && <Sparkles size={11} className="ml-1.5 inline text-iris/60" aria-label="Suggested by Chip" />}
         </button>
       )}
       <label className={`relative cursor-pointer ${d.text ? `chip-tag ${TONE_STYLES[d.tone]}` : 'grid h-6 w-6 place-items-center rounded-lg text-ink-4 opacity-0 group-hover:opacity-100'}`}>
         {d.text || <CalendarDays size={13} />}
-        <input type="date" className="absolute inset-0 cursor-pointer opacity-0" value={task.due_on ?? ''} onChange={(e) => void onSave(task, { due_on: e.target.value || null })} aria-label={`Date for ${task.title}`} />
+        <input type="date" className="absolute inset-0 cursor-pointer opacity-0" value={task.due_on ?? ''} disabled={!canEdit} onChange={(e) => void onSave(task, { due_on: e.target.value || null })} aria-label={`Date for ${task.title}`} />
       </label>
-      <button
+      {canEdit && <button
         className="grid h-6 w-6 place-items-center rounded-lg text-ink-4 opacity-0 hover:text-rose group-hover:opacity-100 focus:opacity-100"
         aria-label={`Delete ${task.title}`}
         onClick={async () => {
+          if (room) return room.lists.removeTask(task.id);
           try {
             await deleteTask(task.id);
             useWorkspace.setState({ tasks: useWorkspace.getState().tasks.filter((t) => t.id !== task.id) });
@@ -209,7 +232,7 @@ function TaskRow({ task, onSave }: { task: Task; onSave: (t: Task, patch: Partia
         }}
       >
         <X size={14} />
-      </button>
+      </button>}
     </motion.li>
   );
 }

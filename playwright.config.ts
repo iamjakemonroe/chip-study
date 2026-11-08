@@ -8,6 +8,9 @@ const sizes = {
   ipad: { viewport: { width: 820, height: 1180 }, isMobile: true, hasTouch: true, deviceScaleFactor: 2 },
   desktop: { viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1 },
 };
+/** Chrome's pretend camera and microphone (a test pattern and a tone), so study rooms' lobby and
+ * room can be tested without real devices or a permission prompt. */
+const fakeMedia = { launchOptions: { args: ['--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream'] } };
 
 export default defineConfig({
   testDir: 'e2e',
@@ -25,9 +28,9 @@ export default defineConfig({
     timezoneId: 'Africa/Lagos',
   },
   projects: [
-    { name: 'chromium-desktop', use: { ...devices['Desktop Chrome'], channel: 'chrome', ...sizes.desktop } },
-    { name: 'chromium-ipad', use: { ...devices['Desktop Chrome'], channel: 'chrome', ...sizes.ipad } },
-    { name: 'chromium-phone', use: { ...devices['Desktop Chrome'], channel: 'chrome', ...sizes.phone } },
+    { name: 'chromium-desktop', use: { ...devices['Desktop Chrome'], channel: 'chrome', ...sizes.desktop, ...fakeMedia } },
+    { name: 'chromium-ipad', use: { ...devices['Desktop Chrome'], channel: 'chrome', ...sizes.ipad, ...fakeMedia } },
+    { name: 'chromium-phone', use: { ...devices['Desktop Chrome'], channel: 'chrome', ...sizes.phone, ...fakeMedia } },
     { name: 'webkit-desktop', use: { ...devices['Desktop Safari'], ...sizes.desktop } },
     { name: 'webkit-ipad', use: { ...devices['iPad (gen 7)'], ...sizes.ipad } },
     { name: 'webkit-phone', use: { ...devices['iPhone 13'], ...sizes.phone } },

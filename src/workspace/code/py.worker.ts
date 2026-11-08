@@ -4,11 +4,16 @@
  * student's other .py files are written beside main so `import helper` works, packages that come
  * with Pyodide (numpy, pandas, matplotlib…) load when imported, and plots come back as images. */
 
+import { PYODIDE_UPSTREAM, PYODIDE_VERSION } from '../../../shared/pyodide.ts';
 import type { RunEvent, RunRequest } from './runner.ts';
 
 declare const self: DedicatedWorkerGlobalScope;
 
-const PYODIDE = 'https://cdn.jsdelivr.net/pyodide/v314.0.7/full/';
+/** The site's own copy (served by the Worker, worker/pyodide.ts). The dev server and the e2e
+ * preview have no Worker, so they load the same release from its CDN. */
+const PYODIDE = import.meta.env.DEV || import.meta.env.MODE === 'e2e'
+  ? `${PYODIDE_UPSTREAM}${PYODIDE_VERSION}/full/`
+  : new URL(`/pyodide/${PYODIDE_VERSION}/full/`, self.location.origin).href;
 const HOME = '/home/pyodide/project';
 
 interface Pyodide {

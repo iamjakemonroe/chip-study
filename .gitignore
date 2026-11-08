@@ -6,6 +6,7 @@ dist-ssr
 !.env.e2e
 !.env.example
 .wrangler
+.dev.vars*
 test-results
 playwright-report
 shots

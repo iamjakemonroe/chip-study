@@ -4,8 +4,8 @@ import { forceLinting, linter, lintGutter } from '@codemirror/lint';
 import { Compartment, EditorState, Prec, type Extension, type Text } from '@codemirror/state';
 import { EditorView, keymap } from '@codemirror/view';
 import { basicSetup } from 'codemirror';
-import { AlignLeft, Check, MessageCircle, Minus, Play, Plus, Settings2, Square } from 'lucide-react';
-import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
+import { AlignLeft, Check, Eye, MessageCircle, Minus, Play, Plus, Settings2, Square } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import { Menu, Segmented, Spinner } from '../components/ui.tsx';
 import { renameDocument } from '../lib/api.ts';
 import { renderMarkdown } from '../lib/markdown.ts';
@@ -18,6 +18,7 @@ import { buildPage, cleanTraceback, pageFor, type CodeFile } from './code/projec
 import { previewBridge, startRun, type RunEvent, type RunHandle } from './code/runner.ts';
 import { useCodeSettings } from './code/settings.ts';
 import { editorTheme } from './code/theme.ts';
+import { useRoomBinding } from './roomBinding.ts';
 import { editors, useWorkspace } from './store.ts';
 import { useSaver } from './useSaver.ts';
 
@@ -52,9 +53,14 @@ export default function CodeDoc({ doc, onAskChip }: { doc: StudyDocument; onAskC
     vim: new Compartment(),
     guides: new Compartment(),
     tabs: new Compartment(),
+    access: new Compartment(),
   }).current;
-  const { saver } = useSaver(doc);
-  const initial = doc.content as Content;
+  // In a study room: bound live to the room's shared text (y-codemirror), saved by the room.
+  const room = useRoomBinding();
+  const canEdit = room ? room.canEdit : true;
+  const shared = useMemo(() => room?.code(doc.id) ?? null, [doc.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  const { saver } = useSaver(doc, { off: !!room });
+  const initial = (shared ? { lang: shared.lang, code: shared.text, stdin: shared.stdin } : doc.content) as Content;
   const [lang, setLang] = useState(initial.lang ?? langFromName(doc.title)?.id ?? 'python');
   const langRef = useRef(lang);
   const settings = useCodeSettings();
@@ -91,7 +97,7 @@ export default function CodeDoc({ doc, onAskChip }: { doc: StudyDocument; onAskC
     const others = useWorkspace
       .getState()
       .docs.filter((d) => d.kind === 'code' && d.id !== doc.id)
-      .map((d) => ({ name: d.title, code: leaving.get(d.id) ?? String((d.content as Content).code ?? '') }));
+      .map((d) => ({ name: d.title, code: room ? room.codeText(d.id) : (leaving.get(d.id) ?? String((d.content as Content).code ?? '')) }));
     return { files: [main, ...others], main };
   };
 
@@ -101,11 +107,13 @@ export default function CodeDoc({ doc, onAskChip }: { doc: StudyDocument; onAskC
     const v = new EditorView({
       parent: host.current,
       state: EditorState.create({
-        doc: leaving.get(doc.id) ?? initial.code ?? '',
+        doc: shared ? shared.text : (leaving.get(doc.id) ?? initial.code ?? ''),
         extensions: [
           parts.vim.of([]),
+          ...(shared ? [shared.extension] : []),
           basicSetup,
           keymap.of([indentWithTab]),
+          parts.access.of(access(canEdit)),
           Prec.high(
             keymap.of([
               { key: 'Mod-Enter', run: () => (actions.current.run(), true) },
@@ -144,7 +152,7 @@ export default function CodeDoc({ doc, onAskChip }: { doc: StudyDocument; onAskC
     return () => {
       if (refreshTimer.current) clearTimeout(refreshTimer.current);
       run.current?.stop();
-      leaving.set(doc.id, v.state.doc.toString());
+      if (!room) leaving.set(doc.id, v.state.doc.toString());
       v.destroy();
       view.current = null;
       editors.text = () => '';
@@ -174,9 +182,23 @@ export default function CodeDoc({ doc, onAskChip }: { doc: StudyDocument; onAskC
     if (named && named.id !== langRef.current) {
       setLang(named.id);
       langRef.current = named.id;
-      saver.change(read);
+      if (shared) {
+        if (canEdit) shared.setLang(named.id);
+      } else saver.change(read);
     }
   }, [doc.title]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // In a room: someone else changed the language, or what this screen may do changed.
+  const sharedLang = room ? (doc.content as Content).lang : undefined;
+  useEffect(() => {
+    if (sharedLang && sharedLang !== langRef.current) {
+      setLang(sharedLang);
+      langRef.current = sharedLang;
+    }
+  }, [sharedLang]);
+  useEffect(() => {
+    view.current?.dispatch({ effects: parts.access.reconfigure(access(canEdit)) });
+  }, [canEdit]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Settings, as they change.
   useEffect(() => {
@@ -330,9 +352,11 @@ export default function CodeDoc({ doc, onAskChip }: { doc: StudyDocument; onAskC
   };
 
   const changeLang = (id: string) => {
+    if (!canEdit) return;
     setLang(id);
     langRef.current = id;
-    saver.change(read);
+    if (shared) shared.setLang(id);
+    else saver.change(read);
     const taken = useWorkspace
       .getState()
       .docs.filter((d) => d.id !== doc.id)
@@ -340,6 +364,10 @@ export default function CodeDoc({ doc, onAskChip }: { doc: StudyDocument; onAskC
     const next = renameForLang(doc.title, langById(id));
     if (next === doc.title) return;
     const name = freeName(next, taken);
+    if (room) {
+      room.rename(doc.id, name);
+      return;
+    }
     renameDocument(doc.id, name)
       .then(() => useWorkspace.setState({ docs: useWorkspace.getState().docs.map((d) => (d.id === doc.id ? { ...d, title: name } : d)) }))
       .catch((err: unknown) => toast((err as Error).message, 'warn'));
@@ -369,7 +397,7 @@ export default function CodeDoc({ doc, onAskChip }: { doc: StudyDocument; onAskC
   return (
     <div className="code-wrap" data-theme={settings.theme}>
       <div className="code-bar">
-        <select className="field h-9 w-auto py-0 text-sm" value={lang} aria-label="Language" onChange={(e) => changeLang(e.target.value)}>
+        <select className="field h-9 w-auto py-0 text-sm" value={lang} aria-label="Language" disabled={!canEdit} onChange={(e) => changeLang(e.target.value)}>
           {LANGS.map((x) => (
             <option key={x.id} value={x.id}>
               {x.name}
@@ -391,7 +419,12 @@ export default function CodeDoc({ doc, onAskChip }: { doc: StudyDocument; onAskC
           </button>
         )}
         <span className="flex-1" />
-        {canFormat(lang) && (
+        {!canEdit && (
+          <span className="hidden items-center gap-1.5 text-xs font-medium text-ink-3 sm:flex" role="status">
+            <Eye size={14} className="text-iris" /> Viewing
+          </span>
+        )}
+        {canFormat(lang) && canEdit && (
           <button className="btn btn-ghost btn-sm" onClick={() => void actions.current.format()} disabled={formatting} title="Format the code (Shift + Alt + F)">
             {formatting ? <Spinner size={14} /> : <AlignLeft size={15} />} <span className="hidden sm:inline">Format</span>
           </button>
@@ -491,7 +524,9 @@ export default function CodeDoc({ doc, onAskChip }: { doc: StudyDocument; onAskC
                 onInput={(v) => {
                   setStdin(v);
                   stdinRef.current = v;
-                  saver.change(read);
+                  if (shared) {
+                    if (canEdit) shared.setStdin(v);
+                  } else saver.change(read);
                 }}
                 readsInput={readsInput}
                 showInput={showInput}
@@ -521,6 +556,9 @@ export default function CodeDoc({ doc, onAskChip }: { doc: StudyDocument; onAskC
 }
 
 const tabs = (size: number): Extension => [EditorState.tabSize.of(size), indentUnit.of(' '.repeat(size))];
+
+/** Typing allowed, or read-only (a room's viewers). */
+const access = (canEdit: boolean): Extension => (canEdit ? [] : [EditorState.readOnly.of(true), EditorView.editable.of(false)]);
 
 function Toggle({ on, onChange, children }: { on: boolean; onChange: (v: boolean) => void; children: string }) {
   return (

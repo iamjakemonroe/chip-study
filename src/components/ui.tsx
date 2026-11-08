@@ -214,7 +214,12 @@ export function Menu({
       if (!trigger.current?.contains(e.target as Node) && !list.current?.contains(e.target as Node)) setOpen(false);
     };
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setOpen(false);
-    const onMove = () => setOpen(false);
+    // Closes when its button moves (the window resizes, or something around the button scrolls),
+    // not when something elsewhere scrolls (a document beside it, a chat filling up).
+    const onMove = (e: Event) => {
+      const t = e.target;
+      if (e.type === 'resize' || t === document || t === window || (t instanceof Node && t.contains(trigger.current))) setOpen(false);
+    };
     window.addEventListener('pointerdown', onDown);
     window.addEventListener('keydown', onKey);
     window.addEventListener('resize', onMove);
@@ -329,7 +334,7 @@ export function Toasts() {
   const toasts = useToasts((s) => s.toasts);
   const dismiss = useToasts((s) => s.dismiss);
   return (
-    <div className="pointer-events-none fixed inset-x-0 bottom-0 z-[90] flex flex-col items-center gap-2 px-4 pb-[max(1rem,env(safe-area-inset-bottom))]" aria-live="polite">
+    <div className="toasts pointer-events-none fixed inset-x-0 bottom-0 z-[90] flex flex-col items-center gap-2 px-4 pb-[max(1rem,env(safe-area-inset-bottom))]" aria-live="polite">
       <AnimatePresence>
         {toasts.map((t) => (
           <motion.div

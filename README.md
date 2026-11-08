@@ -4,6 +4,10 @@ A calm place to study and really learn, with Chip as a tutor. study.kaivon.app, 
 
 - **Frontend** (this repo): Vite, React 19, TypeScript, Tailwind 4, framer-motion, zustand, TipTap,
   KaTeX, CodeMirror (loaded only for code tabs). The landing page loads on its own, without the app.
+- **Rooms** (studying together, live): `worker/` is the Worker and the `StudyRoom` Durable Object
+  (Yjs, chat, Chip relay, and Cloudflare Realtime video); the screens are `src/rooms/` (the lobby,
+  the room, live editing bound to the workspace's own editors, media, people, chat and the shared
+  Chip); the contract is `docs/rooms.md`.
 - **Backend**: Utopia's Supabase project (a Kaivon account signs in here too). The study tables,
   the allowance and the AI-use record are in Utopia's repo, branch `chip-study`:
   `supabase/migrations/20261028140000_chip_study.sql`, `supabase/functions/chip-study`, and
@@ -21,6 +25,7 @@ npm run dev
 
 ```sh
 npm run typecheck && npm run lint && npm test   # types, lint, unit tests (vitest)
+npm run test:rooms                               # the room server under wrangler dev, with mock upstreams
 npm run e2e                                      # Playwright: Chrome and WebKit, phone, iPad, desktop
 ```
 

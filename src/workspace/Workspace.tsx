@@ -25,6 +25,7 @@ import { lazy, Suspense, useCallback, useEffect, useState, type ReactNode } from
 import { Link, useParams } from 'react-router';
 import { Orb } from '../components/Orb.tsx';
 import { FocusPill } from '../components/TopBar.tsx';
+import { StudyTogether } from '../rooms/StudyTogether.tsx';
 import { ChipLoader } from '../components/ChipLoader.tsx';
 import { Confirm, Menu, MenuItem, Modal } from '../components/ui.tsx';
 import { createDocument, deleteDocument, getAssignment, listDocuments, listLog, listMessages, listNotes, listSources, listTasks, listThreads, renameDocument } from '../lib/api.ts';
@@ -264,6 +265,7 @@ function Header({ onPanel, wide, doc }: { onPanel: (p: Panel | null) => void; wi
         </div>
       </div>
       <FocusPill />
+      <StudyTogether assignmentId={assignment.id} kind={assignment.kind} />
       <button
         className="btn btn-ghost btn-sm hidden min-[1100px]:inline-flex"
         onClick={() => {

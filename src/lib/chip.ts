@@ -30,6 +30,17 @@ export interface ChatRequest {
   attached?: string[];
 }
 
+/** A question to a study room's shared Chip: the room's assignment and conversation are the
+ * room's, so there's no assignment or thread (docs/rooms.md, "Chip in a room"). */
+export interface RoomChatRequest {
+  room: string;
+  mode: Mode;
+  text: string;
+  selection?: string;
+  doc: string;
+  model: ModelKind;
+}
+
 /** Chip said no before starting: why ('limit', 'busy', 'size', 'uploads', 'account'), and when
  * it's back. */
 export class ChipRefused extends Error {
@@ -54,7 +65,7 @@ async function token(): Promise<string> {
   return access;
 }
 
-export async function askChip(req: ChatRequest, onEvent: (e: ChipEvent) => void, signal?: AbortSignal): Promise<void> {
+export async function askChip(req: ChatRequest | RoomChatRequest, onEvent: (e: ChipEvent) => void, signal?: AbortSignal): Promise<void> {
   const res = await fetch(`${SUPABASE_URL}/functions/v1/chip-study`, {
     method: 'POST',
     headers: {

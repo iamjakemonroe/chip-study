@@ -18,6 +18,7 @@ const router = createBrowserRouter([
   { path: '/privacy', lazy: () => import('./pages/Legal.tsx').then((m) => ({ Component: m.Privacy })) },
   { path: '/institutions', lazy: () => import('./landing/Institutions.tsx').then((m) => ({ Component: m.Institutions })) },
   { path: '/join/:token', lazy: () => import('./pages/JoinPage.tsx').then((m) => ({ Component: m.JoinPage })) },
+  { path: '/room/:token', lazy: () => import('./rooms/RoomPage.tsx').then((m) => ({ Component: m.RoomPage })) },
   { path: '/lti', lazy: () => import('./pages/LtiPage.tsx').then((m) => ({ Component: m.LtiPage })) },
   { path: '/guides/:slug', lazy: () => import('./landing/Guide.tsx').then((m) => ({ Component: m.Guide })) },
   {
