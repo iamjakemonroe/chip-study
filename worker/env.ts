@@ -10,6 +10,9 @@ export interface Env {
   SUPABASE_URL: string;
   /** Secret (public value, kept as a secret so deploys never reset it): the publishable key. */
   SUPABASE_ANON_KEY?: string;
+  /** "eu" (wrangler.jsonc): rooms run and keep their state only in the EU. Empty in local tests,
+   * which can't place a room in a jurisdiction. */
+  ROOMS_JURISDICTION?: string;
   /** The study-rooms function: `<SUPABASE_URL>/functions/v1/study-rooms`. */
   ROOM_SERVICE_URL: string;
   /** Secret: shared with the study-rooms function; also signs room tickets. */

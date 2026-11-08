@@ -29,6 +29,9 @@
   "r2_buckets": [{ "binding": "PYODIDE", "bucket_name": "chip-study-pyodide" }],
   "vars": {
     "SUPABASE_URL": "https://atrgasakfnmixhictynh.supabase.co",
+    // Rooms (Durable Objects) run and keep their state only in the EU, like the rest of Chip
+    // Study's stored data (Ireland). Changing it later starts every room afresh.
+    "ROOMS_JURISDICTION": "eu",
     "ROOM_SERVICE_URL": "https://atrgasakfnmixhictynh.supabase.co/functions/v1/study-rooms"
   },
   "routes": [{ "pattern": "study.kaivon.app", "custom_domain": true }],

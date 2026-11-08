@@ -66,7 +66,10 @@ async function api(request: Request, env: Env, url: URL): Promise<Response> {
   if (!configured(env.SUPABASE_URL) || !configured(env.SUPABASE_ANON_KEY) || !configured(env.ROOM_SERVER_SECRET)) {
     return error(503, 'not_configured', { detail: 'the room server is not set up yet' });
   }
-  const room = () => env.ROOMS.get(env.ROOMS.idFromName(roomId));
+  // Rooms run and keep their working state (people, chat, the shared work until it's saved) only
+  // in the EU, like the rest of Chip Study's stored data (Ireland). Media never goes through them.
+  const rooms = env.ROOMS_JURISDICTION === 'eu' ? env.ROOMS.jurisdiction('eu') : env.ROOMS;
+  const room = () => env.ROOMS.get(rooms.idFromName(roomId));
 
   if (route === 'ws') {
     if (request.headers.get('upgrade')?.toLowerCase() !== 'websocket') return error(426, 'bad_request', { detail: 'expected a WebSocket upgrade' }, { upgrade: 'websocket' });

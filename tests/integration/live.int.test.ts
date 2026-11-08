@@ -154,6 +154,8 @@ beforeAll(async () => {
       `SUPABASE_ANON_KEY=${SETTINGS.anon}`,
       `ROOM_SERVICE_URL=${mock.url}/functions/v1/study-rooms`,
       `ROOM_SERVER_SECRET=${SETTINGS.roomSecret}`,
+      // Local runs can't place a room in a jurisdiction; the real one keeps rooms in the EU.
+      'ROOMS_JURISDICTION=',
       `REALTIME_APP_ID=${SETTINGS.appId}`,
       `REALTIME_APP_SECRET=${SETTINGS.appSecret}`,
       `TURN_KEY_ID=${SETTINGS.turnKey}`,
