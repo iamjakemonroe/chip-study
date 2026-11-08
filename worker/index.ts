@@ -1,5 +1,6 @@
-/** The Worker for study.kaivon.app: the room server's API under /api/rooms/:roomId/..., and
- * everything else from the built app (dist) exactly as before.
+/** The Worker for study.kaivon.app: the room server's API under /api/rooms/:roomId/..., Python
+ * for the code editor under /pyodide/ (pyodide.ts), and everything else from the built app (dist)
+ * exactly as before.
  *
  * Every HTTP call carries the person's Supabase access token. The Worker checks it by calling
  * study_room_access as them, refuses unless they are in the room and it is live, and passes only
@@ -7,6 +8,7 @@
  * it uses a ticket from POST /ticket instead. The contract is docs/rooms.md. */
 import { ROOM, type ApiError, type ApiErrorCode, type TicketAnswer } from '../shared/rooms.ts';
 import { configured, type Env } from './env.ts';
+import { servePyodide } from './pyodide.ts';
 import type { Answer, RtcOp } from './room.ts';
 import { REALTIME_API, SfuError, turnCredentials } from './sfu.ts';
 import { checkAccess } from './supabase.ts';
@@ -101,6 +103,14 @@ export default {
       } catch (e) {
         console.error('room api', url.pathname, e instanceof Error ? e.message : e);
         return error(500, 'internal');
+      }
+    }
+    if (url.pathname.startsWith('/pyodide/')) {
+      try {
+        return await servePyodide(request, env.PYODIDE);
+      } catch (e) {
+        console.error('pyodide', url.pathname, e instanceof Error ? e.message : e);
+        return new Response('Python is not reachable right now. Try again in a moment.', { status: 502, headers: { 'cache-control': 'no-store' } });
       }
     }
     return env.ASSETS.fetch(request);

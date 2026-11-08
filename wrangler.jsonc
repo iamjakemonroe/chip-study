@@ -1,7 +1,8 @@
-// Cloudflare Worker for study.kaivon.app: the web app (dist) and the room server for studying
-// together (worker/: /api/rooms/*, one StudyRoom Durable Object per room, video through
-// Cloudflare Realtime). Chip's brain is the chip-study edge function on Utopia's Supabase project;
-// rooms reach the database through its study-rooms function. Contract: docs/rooms.md.
+// Cloudflare Worker for study.kaivon.app: the web app (dist), Python for the code editor
+// (/pyodide/, kept in R2) and the room server for studying together (worker/: /api/rooms/*, one
+// StudyRoom Durable Object per room, video through Cloudflare Realtime). Chip's brain is the
+// chip-study edge function on Utopia's Supabase project; rooms reach the database through its
+// study-rooms function. Contract: docs/rooms.md.
 // Deploy: npm run deploy (after node scripts/env.mjs). Rooms also need these, set once as
 // secrets (never in this file) by .tools/go-live-rooms.sh:
 //   SUPABASE_ANON_KEY     the app's public publishable key (VITE_SUPABASE_ANON_KEY)
@@ -17,12 +18,15 @@
     "directory": "./dist",
     "binding": "ASSETS",
     "not_found_handling": "single-page-application",
-    "run_worker_first": ["/api/*"]
+    "run_worker_first": ["/api/*", "/pyodide/*"]
   },
   "durable_objects": {
     "bindings": [{ "name": "ROOMS", "class_name": "StudyRoom" }]
   },
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["StudyRoom"] }],
+  // Python for the code editor, kept here after its first download (worker/pyodide.ts). The
+  // bucket is made once by .tools/go-live-rooms.sh.
+  "r2_buckets": [{ "binding": "PYODIDE", "bucket_name": "chip-study-pyodide" }],
   "vars": {
     "SUPABASE_URL": "https://atrgasakfnmixhictynh.supabase.co",
     "ROOM_SERVICE_URL": "https://atrgasakfnmixhictynh.supabase.co/functions/v1/study-rooms"

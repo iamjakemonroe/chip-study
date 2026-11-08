@@ -5,6 +5,8 @@ import type { StudyRoom } from './room.ts';
 export interface Env {
   ASSETS: Fetcher;
   ROOMS: DurableObjectNamespace<StudyRoom>;
+  /** R2: our copy of the pinned Pyodide release (pyodide.ts). Optional so local runs work without it. */
+  PYODIDE?: R2Bucket;
   SUPABASE_URL: string;
   /** Secret (public value, kept as a secret so deploys never reset it): the publishable key. */
   SUPABASE_ANON_KEY?: string;
