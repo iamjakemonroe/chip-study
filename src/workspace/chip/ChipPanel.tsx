@@ -525,7 +525,7 @@ function Welcome({ mode, kind, onTry }: { mode: (typeof MODES)[number]; kind: 't
   );
 }
 
-function ModelSwitch() {
+export function ModelSwitch() {
   const me = useAuth((s) => s.me);
   const model = usePrefs((s) => s.model);
   const pro = me?.tier === 'pro';

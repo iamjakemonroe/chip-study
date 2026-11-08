@@ -175,10 +175,11 @@ export function SourcesCard({ sources, messageId }: { sources: SuggestedSource[]
 function useSaveToDeck() {
   const [state, setState] = useState<'idle' | 'busy' | 'saved'>('idle');
   const save = async (cards: { front: string; back: string }[]) => {
-    const { assignment } = useWorkspace.getState();
+    // In a study room the assignment is the host's: the cards are yours, on no assignment.
+    const { assignment, room } = useWorkspace.getState();
     setState('busy');
     try {
-      await addCards(cards, assignment?.id ?? null, 'chip');
+      await addCards(cards, room ? null : (assignment?.id ?? null), 'chip');
       setState('saved');
       toast(`${cards.length} card${cards.length === 1 ? '' : 's'} in your review deck. Chip Study will bring them back just before you’d forget.`, 'good');
     } catch (e) {
@@ -203,7 +204,7 @@ export function QuizCard({ questions, onAgain }: { questions: QuizQuestion[]; on
   const finished = picked.every((p) => p !== null);
   const missed = questions.filter((x, i) => picked[i] !== null && picked[i] !== x.answer);
   useEffect(() => {
-    if (finished) void addPractice('quiz', score, questions.length, useWorkspace.getState().assignment?.id ?? null).catch(() => undefined);
+    if (finished) void addPractice('quiz', score, questions.length, useWorkspace.getState().room ? null : (useWorkspace.getState().assignment?.id ?? null)).catch(() => undefined);
   }, [finished]); // eslint-disable-line react-hooks/exhaustive-deps
   return (
     <div className="chip-card">

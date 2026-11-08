@@ -43,14 +43,26 @@ export function clearBackup(id: string) {
   }
 }
 
+/** A saver that never saves: in a study room the room server saves the shared work. */
+const NO_SAVE = {
+  change: () => {},
+  flush: async () => {},
+  resolve: async () => {},
+  hold: () => {},
+  release: () => {},
+  unsaved: false,
+  version: 0,
+} as unknown as Autosaver<() => DocSnapshot>;
+
 /** Saves [doc] as it changes (see Autosaver): change() with a function that gives the document
- * as it is now, read only when it's time to save. */
-export function useSaver(doc: StudyDocument) {
+ * as it is now, read only when it's time to save. With [off] (in a study room) it saves nothing. */
+export function useSaver(doc: StudyDocument, { off = false }: { off?: boolean } = {}) {
   const [state, setState] = useState<SaveState>('saved');
   const backupTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const latest = useRef<(() => DocSnapshot) | null>(null);
 
   const saver = useMemo(() => {
+    if (off) return NO_SAVE;
     const keepBackup = (version: number) => {
       if (backupTimer.current) clearTimeout(backupTimer.current);
       backupTimer.current = setTimeout(
@@ -90,9 +102,10 @@ export function useSaver(doc: StudyDocument) {
       },
     });
     return s;
-  }, [doc.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [doc.id, off]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
+    if (off) return;
     saver.hold();
     const flush = () => void saver.flush();
     const onHide = () => document.visibilityState === 'hidden' && flush();
@@ -113,7 +126,7 @@ export function useSaver(doc: StudyDocument) {
       void saver.flush().finally(() => saver.release());
       if (backupTimer.current) clearTimeout(backupTimer.current);
     };
-  }, [saver]);
+  }, [saver, off]);
 
   return { saver, state };
 }

@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { nothingClipped } from './layout';
 import { MockBackend } from './mock';
+import { MockRoomServer } from './mock-room-server';
 
 /** Every main screen at each size, saved under shots/ to look at, and checked for anything
  * pushed off the side of the screen. */
@@ -434,4 +435,190 @@ test('landing, for schools', async ({ page }, info) => {
   await page.waitForTimeout(1400);
   await noSideScroll(page);
   await page.screenshot({ path: dir('landing-schools', info.project.name) });
+});
+
+// ── Study rooms ───────────────────────────────────────────────────────
+
+
+const GRACE_ID = 'eeeeeeee-0000-4000-8000-000000000001';
+const BEN_ID = 'eeeeeeee-0000-4000-8000-000000000002';
+
+/** Ada's essay in a room Grace hosts (or Ada, with [host]), with Grace and Ben there. */
+async function roomSetup(page: Page, o: { host?: boolean; tier?: 'free' | 'pro' } = {}) {
+  const m = new MockBackend({ tier: o.tier ?? 'free' });
+  const a = m.seedAssignment({ title: 'Coastal erosion essay' });
+  const doc = m.db.study_documents.find((d) => d.assignment_id === a.id)!;
+  doc.content = {
+    type: 'doc',
+    content: [
+      { type: 'heading', attrs: { level: 2 }, content: [{ type: 'text', text: 'Holding the line, or stepping back' }] },
+      { type: 'paragraph', content: [{ type: 'text', text: 'Sea walls protect the town behind them, but they move the problem along the coast: the beach in front narrows, and the next town loses its sand.' }] },
+      { type: 'paragraph', content: [{ type: 'text', text: 'Managed retreat costs less over fifty years, yet it asks people to leave homes their families have lived in for generations.' }] },
+    ],
+  };
+  m.insert('study_notes', { assignment_id: a.id, body: 'Ask about managed retreat in Lagos', pinned: true });
+  m.insert('study_tasks', { assignment_id: a.id, title: 'Read chapter 4 on groynes', due_on: new Date().toISOString().slice(0, 10) });
+  m.insert('study_tasks', { assignment_id: a.id, title: 'Draft the counter-argument', due_on: null });
+  const room = o.host ? m.rooms.seed(a.id, {}) : m.rooms.seed(a.id, { host_id: GRACE_ID, hostName: 'Grace Hopper', ends_at: new Date(Date.now() + 47 * 60_000).toISOString() });
+  const server = new MockRoomServer(m.rooms, () => ({ id: m.user.id, name: 'Ada Lovelace' }));
+  if (!o.host) server.join({ userId: GRACE_ID, name: 'Grace Hopper', role: 'host', canEdit: true });
+  server.join({ userId: BEN_ID, name: 'Ben Okafor', role: 'member' });
+  if (o.host) m.rooms.member(room, 'Ben Okafor', { user_id: BEN_ID });
+  server.pubs = [{ userId: GRACE_ID, sessionId: 's-grace', trackName: `${GRACE_ID}:audio`, kind: 'audio', rids: [] }];
+  await m.install(page);
+  await server.install(page);
+  return { m, server, room, a };
+}
+
+/** Opens a room panel: from its tab when the panels are showing, or from the controls. */
+async function roomPanel(page: Page, name: 'People' | 'Chat' | 'Chip') {
+  const tabs = page.getByRole('navigation', { name: 'Room panels' });
+  if (await tabs.isVisible()) await tabs.getByRole('button', { name: new RegExp(`^${name}`) }).click();
+  else await page.getByRole('toolbar', { name: 'Room controls' }).getByRole('button', { name: new RegExp(`^${name}`) }).click();
+}
+
+async function roomEnter(page: Page, token: string) {
+  await page.goto(`/room/${token}`);
+  await page.getByRole('button', { name: 'Join now' }).click();
+  await expect(page.getByRole('toolbar', { name: 'Room controls' })).toBeVisible();
+  await expect(page.locator('.doc-prose')).toBeVisible();
+}
+
+test('room lobby and waiting room', async ({ page, browserName }, info) => {
+  const { room, m } = await roomSetup(page);
+  await page.goto(`/room/${room.token}`);
+  await expect(page.getByRole('heading', { name: 'Coastal erosion essay' })).toBeVisible();
+  await expect(page.getByText(/Good connection|A slow connection/)).toBeVisible();
+  // Settled: the camera on (a browser that already allows it), or the button to turn it on.
+  const turnOn = page.getByRole('button', { name: 'Turn on camera and microphone' });
+  await expect(page.getByLabel('Your camera', { exact: true }).or(turnOn).first()).toBeVisible();
+  await page.waitForTimeout(600);
+  await noSideScroll(page);
+  await page.screenshot({ path: dir('room-lobby', info.project.name), fullPage: true });
+  if (browserName === 'chromium') {
+    if (await turnOn.isVisible()) await turnOn.click();
+    await expect(page.getByLabel('Your camera', { exact: true })).toBeVisible();
+    await page.waitForTimeout(700);
+    await noSideScroll(page);
+    await page.screenshot({ path: dir('room-lobby-camera', info.project.name), fullPage: true });
+  }
+  room.admission = 'ask';
+  await page.goto(`/room/${room.token}`);
+  await page.getByRole('button', { name: 'Ask to join' }).click();
+  await expect(page.getByRole('heading', { name: 'Waiting to be let in' })).toBeVisible();
+  await noSideScroll(page);
+  await page.screenshot({ path: dir('room-waiting', info.project.name) });
+  room.status = 'ended';
+  room.members = room.members.filter((x) => x.user_id !== m.user.id);
+  await page.goto(`/room/${room.token}`);
+  await expect(page.getByRole('heading', { name: 'This room has ended' })).toBeVisible();
+  await noSideScroll(page);
+  await page.screenshot({ path: dir('room-ended-link', info.project.name) });
+});
+
+test('room: the shared work, tiles and controls', async ({ page }, info) => {
+  const { room, server } = await roomSetup(page);
+  await roomEnter(page, room.token);
+  await page.waitForTimeout(900);
+  await noSideScroll(page);
+  await page.screenshot({ path: dir('room', info.project.name) });
+  // Someone else's cursor in the document, with their name.
+  server.push({ t: 'hand', userId: BEN_ID, up: true });
+  await roomPanel(page, 'People');
+  await expect(page.getByText('Ben Okafor').first()).toBeVisible();
+  await page.waitForTimeout(500);
+  await noSideScroll(page);
+  await page.mouse.move(2, 2);
+  await page.screenshot({ path: dir('room-people', info.project.name) });
+});
+
+test('room: chat and the shared Chip', async ({ page }, info) => {
+  const { room, server } = await roomSetup(page);
+  room.tutor = { class: 'Geography 201', institution: 'Lagos Bay University', course_brief: '', help_level: 'guide', tutor_notes: '' };
+  await roomEnter(page, room.token);
+  server.push({ t: 'chat', id: 'g1', from: { userId: GRACE_ID, name: 'Grace Hopper' }, text: 'I’ll take the counter-argument. Notes: https://example.com/coasts', at: Date.now() - 120_000 });
+  server.push({ t: 'chat', id: 'b1', from: { userId: BEN_ID, name: 'Ben Okafor' }, text: 'I can find the figures for Lagos.', at: Date.now() - 60_000 });
+  await roomPanel(page, 'Chat');
+  await page.getByRole('textbox', { name: 'Message to everyone in the room' }).fill('Great, I’ll tighten the introduction.');
+  await page.keyboard.press('Enter');
+  await expect(page.getByText('Great, I’ll tighten the introduction.')).toBeVisible();
+  await page.waitForTimeout(500);
+  await noSideScroll(page);
+  await page.mouse.move(2, 2);
+  await page.screenshot({ path: dir('room-chat', info.project.name) });
+  server.push({ t: 'chip', id: 'grace1', from: { userId: GRACE_ID, name: 'Grace Hopper' }, question: 'What is a groyne, in one line?', answer: 'A low wall built out into the sea that traps sand, so the beach behind it stays wide.', done: true, at: Date.now() - 30_000 });
+  await roomPanel(page, 'Chip');
+  await page.getByRole('tab', { name: 'Write' }).click();
+  await page.getByRole('textbox', { name: 'Message to Chip, for everyone' }).fill('Help us start the introduction');
+  await page.getByRole('button', { name: 'Send' }).click();
+  await expect(page.getByText('Coastal towns face a hard choice')).toBeVisible();
+  await page.waitForTimeout(700);
+  await noSideScroll(page);
+  await page.mouse.move(2, 2);
+  await page.screenshot({ path: dir('room-chip', info.project.name) });
+});
+
+test('room: read-only, the stage, and a host’s view', async ({ page }, info) => {
+  const { room, server, m } = await roomSetup(page, { host: true });
+  m.rooms.member(room, 'Wren Adeyemi', { state: 'waiting' });
+  room.ends_at = new Date(Date.now() + 4 * 60_000).toISOString();
+  await roomEnter(page, room.token);
+  const invite = page.getByRole('dialog', { name: 'Invite people to study with you' });
+  await page.getByRole('toolbar', { name: 'Room controls' }).getByRole('button', { name: 'More' }).click();
+  await page.getByRole('menuitem', { name: 'Invite people' }).click();
+  await expect(invite).toBeVisible();
+  await page.waitForTimeout(500);
+  await noSideScroll(page);
+  await page.screenshot({ path: dir('room-invite', info.project.name) });
+  await invite.getByRole('button', { name: 'Close' }).click();
+  await roomPanel(page, 'People');
+  await expect(page.getByText('Wren Adeyemi')).toBeVisible();
+  await page.waitForTimeout(500);
+  await noSideScroll(page);
+  await page.mouse.move(2, 2);
+  await page.screenshot({ path: dir('room-host', info.project.name) });
+  await page.keyboard.press('Escape');
+  server.push({ t: 'pubs', publications: [...server.pubs, { userId: BEN_ID, sessionId: 's-ben', trackName: `${BEN_ID}:screen`, kind: 'screen', rids: [] }] });
+  await expect(page.getByRole('region', { name: 'Ben Okafor’s screen' })).toBeVisible();
+  await page.waitForTimeout(600);
+  await noSideScroll(page);
+  await page.mouse.move(2, 2);
+  await page.screenshot({ path: dir('room-stage', info.project.name) });
+});
+
+test('room: viewing only, and the end', async ({ page }, info) => {
+  const { room, server, m, a } = await roomSetup(page);
+  room.edit_mode = 'chosen';
+  room.members.push({ user_id: m.user.id, name: 'Ada Lovelace', role: 'member', state: 'in', can_edit: false, joined_at: new Date().toISOString() });
+  const doc = m.db.study_documents.find((d) => d.assignment_id === a.id)!;
+  server.fill(String(doc.id), 'Draft', 'Sea walls protect the town behind them, but they move the problem along the coast.');
+  await roomEnter(page, room.token);
+  await expect(page.getByText('You’re viewing. A host can let you edit.')).toBeVisible();
+  await page.waitForTimeout(500);
+  await noSideScroll(page);
+  await page.screenshot({ path: dir('room-viewing', info.project.name) });
+  server.end('time');
+  await expect(page.getByRole('heading', { name: 'Time’s up' })).toBeVisible();
+  await noSideScroll(page);
+  await page.screenshot({ path: dir('room-ended', info.project.name) });
+});
+
+test('study together, from the workspace', async ({ page }, info) => {
+  const m = new MockBackend({ tier: 'free' });
+  const inst = m.inst.seed({}, 'teacher');
+  void inst;
+  const a = m.seedAssignment({ title: 'Coastal erosion essay' });
+  await m.install(page);
+  await page.goto(`/app/a/${a.id}`);
+  await expect(page.locator('.doc-prose')).toBeVisible();
+  await page.getByRole('button', { name: /Study together/ }).click();
+  await expect(page.getByRole('dialog', { name: 'Study together' })).toBeVisible();
+  await page.waitForTimeout(500);
+  await noSideScroll(page);
+  await page.screenshot({ path: dir('room-study-together', info.project.name) });
+  await page.getByRole('dialog', { name: 'Study together' }).getByRole('button', { name: 'Open the room' }).click();
+  await expect(page.getByRole('dialog', { name: 'Invite people to study with you' })).toBeVisible();
+  await page.waitForTimeout(500);
+  await noSideScroll(page);
+  await page.screenshot({ path: dir('room-share', info.project.name) });
 });

@@ -100,6 +100,20 @@ export const terms: LegalDoc = {
       ],
     },
     {
+      heading: 'Study rooms',
+      body: [
+        'A study room lets people study an assignment or a topic together, live: the same documents, notes and plan, edited at the same time, with audio, video, screen sharing, chat and one shared Chip. Nothing in a room is recorded.',
+        [
+          'Personal rooms are for people 18 and over. Anyone with the link can join, or the host lets each person in. A free host’s room takes up to 4 people for 60 minutes; a Pro host’s takes up to 10, with no time limit.',
+          'Class rooms are opened by a teacher or admin of a school, college or university, for the classes and students they invite, up to 50. The institution’s admins, and the teachers of an invited class, join as co-hosts.',
+          'The host and co-hosts choose who can edit, can let people in, and can remove anyone. Someone removed can’t rejoin with that link.',
+          'What’s written in a room is saved to the host’s assignment and stays there after the room ends. The room’s chat and Chip messages are kept with that assignment, for its host.',
+          'Each question you ask the room’s Chip uses your own Chip time, and goes in the host’s AI-use record with your name.',
+          'Be kind, and don’t record, copy or share other people’s video, voice or screen without their agreement. The rules in “Using it well” apply in rooms too.',
+        ],
+      ],
+    },
+    {
       heading: 'Inviting friends',
       body: [
         'You can share your invite link. When someone makes a new account with it and asks Chip 3 questions, you each get a week of Chip Study Pro, added after any Pro you already have.',
@@ -183,7 +197,7 @@ export const privacy: LegalDoc = {
         [
           'Anthropic writes Chip’s answers (Claude). To answer, Chip sends it your message, your assignment’s brief, rubric, sources and readings, your document and anything you selected. Anthropic doesn’t use it to train its models.',
           'Supabase hosts Chip Study’s servers and stores its data (in the European Union, Ireland).',
-          'Cloudflare delivers the website and protects it from attacks.',
+          'Cloudflare delivers the website, protects it from attacks, and carries study rooms’ audio, video and screen sharing between the people in them, without keeping it.',
           'Flutterwave processes payments for Pro.',
           'Resend delivers the sign-in codes we email you.',
         ],
@@ -201,6 +215,20 @@ export const privacy: LegalDoc = {
         'Class themes: if you link an assignment to a class, the questions you ask Chip in it can be part of a short summary of what the class is asking, for the class’s teachers. It’s made from the last 14 days of questions by students in the class, only once 5 or more of them have asked, with no names and no quotes. Your chats are never shown. To make it, those questions are sent to our AI provider; we keep the summary, not a copy of the questions.',
         'Opening Chip Study from a learning platform: we keep the platform’s ID for you (an ID, not your name), the course’s ID and title, and whether you’re a teacher or a student there. We don’t store the name the platform sends. If it sends an email that isn’t on your institution’s confirmed domain, we keep it for at most an hour, while you sign in to link your accounts.',
         'When an institution registers, we keep what it tells us (its name, country, website, email domain, its contact’s name and role, and the email of whoever registered it) to check it and to run it.',
+      ],
+    },
+    {
+      heading: 'Study rooms',
+      body: [
+        'Nothing in a study room is recorded: we don’t keep its audio, video or screen sharing. They pass through Cloudflare’s network (Cloudflare Realtime) to reach the others in the room, and aren’t stored.',
+        [
+          'Others in a room see your name (your display name or username, never your email), and your camera, microphone and screen when you turn them on, and whether you can edit.',
+          'What’s written in a room’s shared work is saved to the host’s assignment. The room’s chat and Chip messages are kept with that assignment, for its host.',
+          'Questions you ask the room’s Chip go in the host’s AI-use record with your name, so on a school assignment the teacher sees who used Chip.',
+          'We keep who is in each room, their role, whether they can edit, and whether they were let in or removed, to run the room.',
+          'Personal rooms are for people 18 and over. Hosts and co-hosts can remove anyone.',
+        ],
+        'To check your camera and connection before you join, your browser talks to Cloudflare’s network briefly. Your camera and microphone choices are kept on your device.',
       ],
     },
     {

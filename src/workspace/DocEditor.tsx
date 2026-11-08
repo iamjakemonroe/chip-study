@@ -3,7 +3,7 @@ import type { Node as PMNode } from '@tiptap/pm/model';
 import { EditorContent, useEditor } from '@tiptap/react';
 import { BubbleMenu } from '@tiptap/react/menus';
 import katex from 'katex';
-import { Bold, ClipboardCheck, Italic, Link2, MessageCircle, Wand2 } from 'lucide-react';
+import { Bold, ClipboardCheck, Eye, Italic, Link2, MessageCircle, Wand2 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Modal } from '../components/ui.tsx';
 import { listDocuments, type DocSnapshot } from '../lib/api.ts';
@@ -13,6 +13,7 @@ import { usePrefs } from '../store/prefs.ts';
 import { toast } from '../store/toast.ts';
 import { chipWordCount, extensions, plainText, refreshCitations } from './extensions.ts';
 import { CitePicker } from './panels/SourcesPanel.tsx';
+import { useRoomBinding } from './roomBinding.ts';
 import { editors, useWorkspace } from './store.ts';
 import { Toolbar } from './Toolbar.tsx';
 import { clearBackup, readBackup, useSaver } from './useSaver.ts';
@@ -43,11 +44,15 @@ function snapshot(editor: Editor): DocSnapshot {
 const whenIdle = (fn: () => void) =>
   'requestIdleCallback' in window ? requestIdleCallback(fn, { timeout: 1000 }) : setTimeout(fn, 1);
 
-/** The writing surface: a calm page, the tools above it, saving as you go. */
+/** The writing surface: a calm page, the tools above it, saving as you go. In a study room it's
+ * bound to the room's shared document instead (live, with everyone's cursors), and read-only for
+ * anyone who can't edit. */
 export function DocEditor({ doc, onAskChip }: { doc: StudyDocument; onAskChip: (mode: 'explain' | 'write' | 'check', text: string) => void }) {
   const docFont = usePrefs((s) => s.docFont);
   const focusMode = useWorkspace((s) => s.focusMode);
-  const { saver, state } = useSaver(doc);
+  const room = useRoomBinding();
+  const canEdit = room ? room.canEdit : true;
+  const { saver, state } = useSaver(doc, { off: !!room });
   const [math, setMath] = useState<{ kind: 'inline' | 'block'; latex: string; pos: number | null } | null>(null);
   const [link, setLink] = useState<string | null>(null);
   const [citing, setCiting] = useState(false);
@@ -68,6 +73,7 @@ export function DocEditor({ doc, onAskChip }: { doc: StudyDocument; onAskChip: (
   };
 
   const content = useMemo(() => {
+    if (room) return undefined;
     const backup = readBackup(doc);
     const c = backup?.content ?? doc.content;
     return c && (c as { type?: string }).type === 'doc' ? c : EMPTY;
@@ -75,19 +81,20 @@ export function DocEditor({ doc, onAskChip }: { doc: StudyDocument; onAskChip: (
 
   const editor = useEditor(
     {
-      extensions: extensions({ onMath: (kind, latex, pos) => setMath({ kind, latex, pos }) }),
+      extensions: [...extensions({ onMath: (kind, latex, pos) => setMath({ kind, latex, pos }), shared: !!room }), ...(room?.docExtensions(doc.id) ?? [])],
       content,
+      editable: canEdit,
       shouldRerenderOnTransaction: false,
       editorProps: {
         attributes: { class: 'doc-prose', 'aria-label': `${doc.title}: your document`, spellcheck: 'true', 'aria-multiline': 'true', role: 'textbox' },
       },
       onCreate: ({ editor: e }) => {
         counts(e);
-        if (readBackup(doc)) {
+        if (!room && readBackup(doc)) {
           saver.change(() => snapshot(e));
           toast('Restored the changes you hadn’t saved on this device.', 'good');
         }
-        if (editors.pending) {
+        if (editors.pending && e.isEditable) {
           const html = editors.pending;
           editors.pending = null;
           setTimeout(() => {
@@ -124,12 +131,18 @@ export function DocEditor({ doc, onAskChip }: { doc: StudyDocument; onAskChip: (
     };
   }, [editor]);
 
-  // Citations follow their sources and the referencing style.
+  // In a room, editing comes and goes with what a host allows.
+  useEffect(() => {
+    if (editor && !editor.isDestroyed && editor.isEditable !== canEdit) editor.setEditable(canEdit);
+  }, [editor, canEdit]);
+
+  // Citations follow their sources and the referencing style (in a room, only an editor's screen
+  // may change the shared document).
   const sources = useWorkspace((s) => s.sources);
   const style = useWorkspace((s) => s.assignment?.style ?? 'apa');
   useEffect(() => {
-    if (editor && !editor.isDestroyed) refreshCitations(editor, sources, style);
-  }, [editor, sources, style]);
+    if (editor && !editor.isDestroyed && canEdit) refreshCitations(editor, sources, style);
+  }, [editor, sources, style, canEdit]);
 
   if (!editor) return null;
 
@@ -145,10 +158,18 @@ export function DocEditor({ doc, onAskChip }: { doc: StudyDocument; onAskChip: (
 
   return (
     <div className={`doc-shell ${docFont === 'sans' ? 'doc-sans' : 'doc-serif'} ${focusMode ? 'doc-focus' : ''}`}>
-      <div className="doc-toolbar">
-        <Toolbar editor={editor} onLink={() => setLink(editor.getAttributes('link').href ?? '')} onMath={(kind) => setMath({ kind, latex: '', pos: null })} onCite={() => setCiting(true)} />
-      </div>
-      {state === 'conflict' && (
+      {canEdit ? (
+        <div className="doc-toolbar">
+          <Toolbar editor={editor} onLink={() => setLink(editor.getAttributes('link').href ?? '')} onMath={(kind) => setMath({ kind, latex: '', pos: null })} onCite={() => setCiting(true)} />
+        </div>
+      ) : (
+        <div className="doc-toolbar">
+          <p className="flex items-center justify-center gap-2 px-4 py-1.5 text-sm text-ink-3" role="status">
+            <Eye size={15} className="flex-none text-iris" /> You’re viewing. A host can let you edit.
+          </p>
+        </div>
+      )}
+      {!room && state === 'conflict' && (
         <div className="mx-auto mt-4 flex max-w-3xl flex-wrap items-center gap-3 rounded-2xl border border-sand/30 bg-sand-soft px-4 py-3 text-sm" role="alert">
           <span className="flex-1 text-[#7a5a14]">This document was changed on another device or tab since you opened it.</span>
           <button className="btn btn-ghost btn-sm" onClick={() => void loadTheirs()}>

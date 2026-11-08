@@ -1,5 +1,6 @@
 import type { Page, Route } from '@playwright/test';
 import { MockInstitutions, Raise } from './mock-institutions';
+import { MockRooms } from './mock-rooms';
 
 /** A pretend Supabase for the end-to-end tests, answering the app's requests in the browser
  * (route interception): sign-in by code, the study tables (PostgREST: select, filters, order,
@@ -57,11 +58,25 @@ export interface MockOptions {
 export class MockBackend {
   db: Record<Table, Row[]> = Object.fromEntries(TABLES.map((t) => [t, []])) as unknown as Record<Table, Row[]>;
   user = { id: 'aaaaaaaa-0000-4000-8000-000000000001', email: 'ada@school.edu' };
+  /** The access token this person's sign-in carries (the room server checks it with the database). */
+  accessToken = 'mock-access-token';
   calls: { method: string; path: string; body: unknown }[] = [];
   fastUsed = 0;
   bestUsed = 0;
   /** Schools, colleges and universities: seed them with inst.seed(), inst.klass() and so on. */
   inst = new MockInstitutions(() => ({ id: this.user.id, name: this.opts.name ?? 'Ada Lovelace', email: this.user.email }));
+
+  /** Study rooms (the database side): seed them with rooms.seed() and rooms.member(). */
+  rooms = new MockRooms({
+    me: () => ({ id: this.user.id, name: this.opts.name ?? 'Ada Lovelace' }),
+    tier: () => (this.opts.tier === 'pro' ? 'pro' : 'free'),
+    age: (userId) => this.inst.age.get(userId) ?? null,
+    instRole: (institutionId, userId) => this.inst.roleOf(institutionId, userId),
+    instName: (institutionId) => this.inst.institutions.find((i) => i.id === institutionId)?.name ?? null,
+    assignment: (id) => this.db.study_assignments.find((a) => a.id === id),
+    rows: (table, assignmentId) => this.db[table].filter((r) => r.assignment_id === assignmentId),
+    log: (row) => this.insert('study_ai_log', row).id,
+  });
 
   /** One-time sign-in links (token hashes) from a learning platform, still unused. */
   tokenHashes = new Set<string>();
@@ -74,7 +89,7 @@ export class MockBackend {
   session() {
     const expires = Math.floor(Date.now() / 1000) + 3600 * 24;
     return {
-      access_token: 'mock-access-token',
+      access_token: this.accessToken,
       token_type: 'bearer',
       expires_in: 3600 * 24,
       expires_at: expires,
@@ -295,6 +310,14 @@ export class MockBackend {
       a.class_id = args.p_class ?? null;
       return this.json(route, null);
     }
+    if (this.rooms.handles(fn)) {
+      try {
+        return this.json(route, this.rooms.call(fn, args) ?? null);
+      } catch (e) {
+        if (e instanceof Raise) return this.json(route, { code: 'P0001', message: e.message, details: null, hint: null }, 400);
+        throw e;
+      }
+    }
     if (this.inst.handles(fn)) {
       try {
         return this.json(route, this.inst.call(fn, args) ?? null);
@@ -378,7 +401,10 @@ export class MockBackend {
     }
   }
 
-  private chip(route: Route, body: Record<string, unknown>) {
+  /** How long each piece of a streamed answer waits (ms): 0 sends the whole answer at once. */
+  chipDelay = 0;
+
+  private async chip(route: Route, body: Record<string, unknown>) {
     if (body?.action === 'setup') {
       return this.json(route, {
         title: 'Essay: Coastal erosion and policy',
@@ -402,6 +428,12 @@ export class MockBackend {
     const mode = String(body.mode);
     const text = String(body.text);
     const model = body.model === 'best' && this.opts.tier === 'pro' ? 'best' : 'fast';
+    if (typeof body.room === 'string') {
+      // In a study room: the room's assignment (the host's), never one the screen names.
+      const room = this.rooms.rooms.find((r) => r.id === body.room);
+      if (!room || 'assignment' in body || 'thread' in body) return this.json(route, { error: 'Which room?' }, 400);
+      body = { ...body, assignment: room.assignment_id };
+    }
     let thread = typeof body.thread === 'string' ? this.db.study_threads.find((t) => t.id === body.thread) : undefined;
     if (!thread) thread = this.insert('study_threads', { assignment_id: body.assignment, title: text.slice(0, 80) });
     const asked = this.insert('study_messages', { thread_id: thread.id, assignment_id: body.assignment, role: 'user', mode, content: text });
@@ -413,6 +445,7 @@ export class MockBackend {
     const events: unknown[] = [{ t: 'start', thread: thread.id, message: asked.id, model, note: null }, { t: 'think', text: 'Reading your brief and rubric.' }];
     for (let i = 0; i < answer.length; i += 24) events.push({ t: 'text', text: answer.slice(i, i + 24) });
     events.push({ t: 'done', message: said.id, model, cut: false });
+    if (this.chipDelay) await new Promise((done) => setTimeout(done, this.chipDelay));
     return route.fulfill({
       status: 200,
       headers: { 'access-control-allow-origin': '*', 'content-type': 'text/event-stream; charset=utf-8' },

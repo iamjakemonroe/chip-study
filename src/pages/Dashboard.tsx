@@ -10,6 +10,7 @@ import { Confirm, Menu, MenuItem, Ring } from '../components/ui.tsx';
 import { JoinClassModal } from '../institution/JoinClass.tsx';
 import { SchoolCard } from '../institution/SchoolCard.tsx';
 import { ReferralStrip } from '../components/Referral.tsx';
+import { LiveNow } from '../rooms/LiveNow.tsx';
 import { chipTime, describe } from '../lib/allowance.ts';
 import { deleteAssignment, listAssignments, listDueCards, listFocusSince, listPracticeSince, listTasks, updateAssignment, updateTask } from '../lib/api.ts';
 import { COLORS, TONE_STYLES } from '../lib/colors.ts';
@@ -190,6 +191,7 @@ export function Dashboard() {
           </motion.div>
         </div>
 
+        <LiveNow />
         <SchoolCard />
         <ReferralStrip />
         {running.length > 0 && (
