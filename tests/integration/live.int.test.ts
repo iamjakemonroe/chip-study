@@ -68,11 +68,14 @@ function newest(dir: string): number {
   return t;
 }
 
-/** The e2e build (Supabase answered in the page), made again if the code is newer. */
+/** The e2e build (Supabase answered in the page), made again if the code is newer. Vitest copies
+ * the VITE_ settings of .env.local (the real Supabase) into this process, and Vite prefers settings
+ * it's handed to .env.e2e's, so the build is made without them. */
 function buildApp() {
   const built = existsSync(joinPath(ASSETS, 'index.html')) ? statSync(joinPath(ASSETS, 'index.html')).mtimeMs : 0;
   const source = Math.max(newest(joinPath(ROOT, 'src')), newest(joinPath(ROOT, 'shared')), statSync(joinPath(ROOT, 'index.html')).mtimeMs);
-  if (built < source) execFileSync('npx', ['vite', 'build', '--mode', 'e2e'], { cwd: ROOT, stdio: 'ignore' });
+  const env = Object.fromEntries(Object.entries(process.env).filter(([k]) => !k.startsWith('VITE_')));
+  if (built < source) execFileSync('npx', ['vite', 'build', '--mode', 'e2e'], { cwd: ROOT, stdio: 'ignore', env });
 }
 
 /** A person's pretend Supabase: signed in as them, with the room and its assignment as the database has them. */
