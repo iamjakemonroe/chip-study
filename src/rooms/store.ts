@@ -73,6 +73,8 @@ interface RoomState {
   manage: RoomInfo | null;
   tutor: RoomTutor | null;
   speaker: string | null;
+  /** The browser wouldn't play the room's sound without a tap (Safari, mostly). */
+  audioBlocked: boolean;
 }
 
 const initial: RoomState = {
@@ -113,6 +115,7 @@ const initial: RoomState = {
   manage: null,
   tutor: null,
   speaker: null,
+  audioBlocked: false,
 };
 
 export const useRoom = create<RoomState & { reset: () => void }>((set) => ({

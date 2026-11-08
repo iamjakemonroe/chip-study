@@ -260,19 +260,29 @@ async function accessToken(): Promise<string> {
   return token;
 }
 
+/** How long a call to the room server may take before it counts as lost. */
+export const CALL_TIMEOUT_MS = 20_000;
+
 /** The room server's HTTP API for one room, as the signed-in person. [fetcher] is for tests. */
 export function roomServer(roomId: string, fetcher: typeof fetch = (...a) => fetch(...a)) {
   const call = async <T>(path: string, method: 'GET' | 'POST', body?: unknown): Promise<T> => {
     let res: Response;
+    // A call with no answer counts as failed on the way (media then starts again, as Cloudflare
+    // advises for a lost tracks call).
+    const timeout = new AbortController();
+    const timer = setTimeout(() => timeout.abort(), CALL_TIMEOUT_MS);
     try {
       res = await fetcher(`${ROOMS_BASE}/api/rooms/${roomId}/${path}`, {
         method,
         headers: { Authorization: `Bearer ${await accessToken()}`, ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}) },
         body: body === undefined ? undefined : JSON.stringify(body),
+        signal: timeout.signal,
       });
     } catch (e) {
       if (e instanceof RoomServerError) throw e;
       throw new RoomServerError(0, 'network');
+    } finally {
+      clearTimeout(timer);
     }
     const text = await res.text();
     let json: unknown = {};

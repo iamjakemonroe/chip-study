@@ -1,6 +1,6 @@
 import { AnimatePresence, motion } from 'framer-motion';
 import { CalendarDays, Check, Flag, Plus, Sparkles, X } from 'lucide-react';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Ring } from '../../components/ui.tsx';
 import { addTasks, deleteTask, updateTask } from '../../lib/api.ts';
 import { dayLabel, daysBetween, dueLabel, fromDay } from '../../lib/dates.ts';
@@ -46,7 +46,8 @@ export function TasksPanel({ onPlan }: { onPlan: () => void }) {
 
   const save = async (t: Task, patch: Partial<Pick<Task, 'title' | 'due_on' | 'done'>>) => {
     if (room) {
-      if (canEdit) room.lists.updateTask(t.id, patch);
+      // Titles merge from TaskRow; here: done and the date.
+      if (canEdit) room.lists.updateTask(t.id, { done: patch.done, due_on: patch.due_on });
       return;
     }
     set({ id: t.id, ...patch });
@@ -164,6 +165,9 @@ function TaskRow({ task, onSave }: { task: Task; onSave: (t: Task, patch: Partia
   const canEdit = room ? room.canEdit : true;
   const [editing, setEditing] = useState(false);
   const [title, setTitle] = useState(task.title);
+  // In a room: the title as it was when you started changing it, so your change merges with anyone
+  // else's rather than writing over it.
+  const base = useRef(task.title);
   const d = dayLabel(task.due_on);
   return (
     <motion.li
@@ -192,7 +196,8 @@ function TaskRow({ task, onSave }: { task: Task; onSave: (t: Task, patch: Partia
           onChange={(e) => setTitle(e.target.value)}
           onBlur={() => {
             setEditing(false);
-            if (title.trim() && title.trim() !== task.title) void onSave(task, { title: title.trim() });
+            if (room && title.trim() && title.trim() !== base.current) room.lists.editTaskTitle(task.id, base.current, title.trim());
+            else if (!room && title.trim() && title.trim() !== task.title) void onSave(task, { title: title.trim() });
             else setTitle(task.title);
           }}
           onKeyDown={(e) => {
@@ -204,7 +209,7 @@ function TaskRow({ task, onSave }: { task: Task; onSave: (t: Task, patch: Partia
           }}
         />
       ) : (
-        <button className={`min-w-0 flex-1 text-left text-sm ${task.done ? 'text-ink-4 line-through' : 'text-ink'}`} onClick={() => canEdit && (setTitle(task.title), setEditing(true))}>
+        <button className={`min-w-0 flex-1 text-left text-sm ${task.done ? 'text-ink-4 line-through' : 'text-ink'}`} onClick={() => canEdit && ((base.current = task.title), setTitle(task.title), setEditing(true))}>
           {task.title}
           {task.created_by === 'chip' && <Sparkles size={11} className="ml-1.5 inline text-iris/60" aria-label="Suggested by Chip" />}
         </button>

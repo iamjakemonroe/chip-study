@@ -49,12 +49,14 @@ export interface MediaEnv {
   createPeerConnection(config: RTCConfiguration): RTCPeerConnection;
   setTimeout(fn: () => void, ms: number): unknown;
   clearTimeout(t: unknown): void;
+  now(): number;
 }
 
 export const browserEnv: MediaEnv = {
   createPeerConnection: (config) => new RTCPeerConnection(config),
   setTimeout: (fn, ms) => setTimeout(fn, ms),
   clearTimeout: (t) => clearTimeout(t as ReturnType<typeof setTimeout>),
+  now: () => Date.now(),
 };
 
 /** Runs one change at a time, in order. A failed change doesn't stop the ones after it. */
@@ -84,8 +86,12 @@ const LAYERS: Rid[] = ['f', 'h', 'q'];
 
 /** Waits before trying a failed receive again: a publication's media can lag its announcement. */
 export const RETRY_MS = [700, 1500, 3000, 6000, 10_000, 15_000];
-/** TURN credentials last an hour; new ones are fetched well before. */
-export const TURN_REFRESH_MS = 50 * 60_000;
+/** TURN credentials last ROOM.turnTtlSeconds; new ones are given to both connections well before. */
+export const TURN_REFRESH_MS = (ROOM.turnTtlSeconds * 1000) / 2;
+/** Waits before starting media again after it failed to start (then on every socket open too). */
+export const START_RETRY_MS = [2_000, 5_000, 10_000, 20_000, 30_000];
+/** Starting again for an error within this long of the last time waits its turn instead. */
+export const RECOVER_GAP_MS = 5_000;
 /** Video stopped for a tile that's been off screen this long. */
 export const PAUSE_AFTER_MS = 3_000;
 
@@ -110,10 +116,32 @@ interface Remote {
   tries: number;
   retry: unknown;
   failed: boolean;
-  pauseTimer: unknown;
 }
 
+/** What the screens want of a video, by track name: kept across publications, so a person who
+ * publishes again (same name, new session) comes back on the same layer, or still paused. */
+interface Want {
+  rid: Rid;
+  paused: boolean;
+  timer: unknown;
+}
+
+/** The layer to ask for: [rid] if the publication has it, else the next one alphabetically. */
+const layerFor = (rid: Rid, rids: Rid[]): Rid => (rids.includes(rid) ? rid : ([...rids].sort().find((x) => x >= rid) ?? rids[0] ?? rid));
+
 const sdp = (d: RTCSessionDescriptionInit | null | undefined) => ({ type: d?.type as 'offer' | 'answer', sdp: d?.sdp ?? '' });
+
+/** Stops the transceivers with [mids] (Cloudflare's way to close tracks: stop, then offer). */
+function stopMids(pc: RTCPeerConnection, mids: string[]) {
+  for (const t of pc.getTransceivers()) {
+    if (!t.mid || !mids.includes(t.mid)) continue;
+    try {
+      t.stop();
+    } catch {
+      // Already stopped.
+    }
+  }
+}
 
 export class MediaClient {
   state: MediaState = 'idle';
@@ -141,6 +169,10 @@ export class MediaClient {
   private batch: unknown = null;
   private stopped = false;
   private starting: Promise<void> | null = null;
+  private wants = new Map<string, Want>();
+  private retryTimer: unknown = null;
+  private startTries = 0;
+  private lastRecover = -Infinity;
 
   constructor(
     private api: MediaApi,
@@ -157,8 +189,12 @@ export class MediaClient {
   /** Makes the sessions and connections, then publishes and subscribes to what's wanted. */
   start(): Promise<void> {
     this.stopped = false;
-    this.starting ??= this.begin().finally(() => (this.starting = null));
-    return this.starting;
+    if (this.starting) return this.starting;
+    const p: Promise<void> = this.begin().finally(() => {
+      if (this.starting === p) this.starting = null;
+    });
+    this.starting = p;
+    return p;
   }
 
   private async begin(): Promise<void> {
@@ -188,9 +224,12 @@ export class MediaClient {
       if (epoch !== this.epoch) return;
       this.teardown();
       if (e instanceof RoomServerError && e.code === 'not_configured') return this.setState('unavailable');
+      // 409 not_connected (the socket isn't open yet), the SFU down, offline: try again shortly.
       this.setState('failed');
+      this.scheduleRetry();
       throw e;
     }
+    this.startTries = 0;
     this.setState('ready');
     this.scheduleTurn(epoch);
     for (const l of this.local.values()) void this.publishNow(l.kind);
@@ -199,7 +238,7 @@ export class MediaClient {
 
   private watch(pc: RTCPeerConnection, epoch: number) {
     pc.onconnectionstatechange = () => {
-      if (epoch === this.epoch && pc.connectionState === 'failed') void this.restart();
+      if (epoch === this.epoch && pc.connectionState === 'failed') this.recover();
     };
   }
 
@@ -224,14 +263,69 @@ export class MediaClient {
     await this.start().catch(() => undefined);
   }
 
-  /** The room socket is back after [awayMs]; the server forgot this screen's sessions if it was
-   * away for more than 30 seconds. */
+  private scheduleRetry() {
+    if (this.stopped || this.retryTimer) return;
+    const wait = START_RETRY_MS[Math.min(this.startTries++, START_RETRY_MS.length - 1)];
+    this.retryTimer = this.env.setTimeout(() => {
+      this.retryTimer = null;
+      if (!this.stopped && this.state === 'failed') void this.start().catch(() => undefined);
+    }, wait);
+  }
+
+  /** Something says this screen's sessions are gone (the server doesn't know them, or a call to it
+   * failed on the way): start again, but not more often than every few seconds. */
+  private recover() {
+    if (this.stopped || this.state === 'unavailable') return;
+    const now = this.env.now();
+    if (now - this.lastRecover < RECOVER_GAP_MS) {
+      this.teardown();
+      this.setState('failed');
+      this.scheduleRetry();
+      return;
+    }
+    this.lastRecover = now;
+    void this.restart();
+  }
+
+  /** Whether [e] means this session (or connection) can't be trusted any more: the server doesn't
+   * know it, or a call failed in transport (Cloudflare: replace the connection when a tracks call
+   * has no answer). Starts again if so. */
+  private lost(e: unknown): boolean {
+    if (!(e instanceof RoomServerError)) return false;
+    if (e.code === 'not_your_session' || e.code === 'network' || e.status >= 500) {
+      this.recover();
+      return true;
+    }
+    return false;
+  }
+
+  /** The room socket is back after [awayMs]. The server forgot this screen's sessions if it was
+   * away for more than 30 seconds (measured here, so a sleeping laptop can get it wrong: hello's
+   * publications are checked too, see hello()). Media that failed to start tries again now. */
   socketBack(awayMs: number | null): void {
+    if (this.state === 'failed') {
+      if (this.retryTimer) this.env.clearTimeout(this.retryTimer);
+      this.retryTimer = null;
+      void this.start().catch(() => undefined);
+      return;
+    }
     if (awayMs !== null && awayMs > ROOM.pubGraceMs && this.state !== 'idle' && this.state !== 'unavailable') void this.restart();
+  }
+
+  /** The room's hello: if this screen has published tracks but the room lists none of its
+   * publications on the current publish session, the server has forgotten the session. */
+  hello(pubs: Publication[]): void {
+    this.setPubs(pubs);
+    if (this.state !== 'ready' || this.starting) return;
+    const mine = [...this.local.values()].some((l) => l.published);
+    if (mine && !pubs.some((p) => p.userId === this.userId && p.sessionId === this.pubSession)) this.recover();
   }
 
   private teardown() {
     this.epoch++;
+    this.starting = null;
+    if (this.retryTimer) this.env.clearTimeout(this.retryTimer);
+    this.retryTimer = null;
     if (this.turnTimer) this.env.clearTimeout(this.turnTimer);
     this.turnTimer = null;
     for (const pc of [this.pubPc, this.recvPc]) {
@@ -268,7 +362,8 @@ export class MediaClient {
   stop(): void {
     this.stopped = true;
     this.teardown();
-    for (const r of this.remotes.values()) if (r.pauseTimer) this.env.clearTimeout(r.pauseTimer);
+    for (const w of this.wants.values()) if (w.timer) this.env.clearTimeout(w.timer);
+    this.wants.clear();
     this.remotes.clear();
     this.local.clear();
     this.setState('idle');
@@ -339,6 +434,9 @@ export class MediaClient {
         } catch {
           // Already stopped.
         }
+        // A lost session or a call that failed on the way: start again (this track goes up with
+        // the rest). Anything else: this track couldn't be published.
+        if (this.lost(e)) return;
         if (this.local.get(kind) === l) this.local.delete(kind);
         this.onPublishFailed?.(kind, e);
       } finally {
@@ -361,25 +459,26 @@ export class MediaClient {
     const pc = this.pubPc;
     const t = l.transceiver;
     if (!pc || !t || !this.pubSession || epoch !== this.epoch) return;
+    // Cloudflare's way: keep the mid, stop the transceiver, then offer the change.
     const mid = t.mid;
     try {
-      t.direction = 'inactive';
+      t.stop();
+    } catch {
+      // Already stopped.
+    }
+    l.published = false;
+    l.transceiver = null;
+    if (!mid) return;
+    try {
       const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
-      if (epoch !== this.epoch || !mid) return;
+      if (epoch !== this.epoch) return;
       const res = await this.api.close({ sessionId: this.pubSession, offer: sdp(pc.localDescription ?? offer), tracks: [{ mid }] });
       if (epoch !== this.epoch) return;
       await pc.setRemoteDescription(res.answer);
-    } catch {
-      // The server drops it with the session anyway.
-    } finally {
-      try {
-        t.stop();
-      } catch {
-        // Already stopped.
-      }
-      l.published = false;
-      l.transceiver = null;
+    } catch (e) {
+      // A lost session or a failed call: start again. Otherwise the server drops it with the session.
+      if (epoch === this.epoch) this.lost(e);
     }
   }
 
@@ -404,7 +503,8 @@ export class MediaClient {
     }
     for (const p of theirs) {
       if (this.remotes.has(p.trackName)) continue;
-      this.remotes.set(p.trackName, { pub: p, mid: null, rid: 'q', paused: false, asked: null, tries: 0, retry: null, failed: false, pauseTimer: null });
+      const w = this.wants.get(p.trackName);
+      this.remotes.set(p.trackName, { pub: p, mid: null, rid: layerFor(w?.rid ?? 'q', p.rids), paused: w?.paused ?? false, asked: null, tries: 0, retry: null, failed: false });
     }
     this.schedule();
   }
@@ -412,22 +512,30 @@ export class MediaClient {
   /** What a screen wants of a video publication: a layer, or nothing while it's off screen (after
    * a short wait, so scrolling past doesn't stop and start it). */
   want(trackName: string, rid: Rid | null): void {
-    const r = this.remotes.get(trackName);
-    if (!r || r.pub.kind === 'audio' || r.pub.kind === 'screen-audio') return;
-    if (r.pauseTimer) {
-      this.env.clearTimeout(r.pauseTimer);
-      r.pauseTimer = null;
+    let w = this.wants.get(trackName);
+    if (!w) this.wants.set(trackName, (w = { rid: 'q', paused: false, timer: null }));
+    if (w.timer) {
+      this.env.clearTimeout(w.timer);
+      w.timer = null;
     }
+    const want = w;
     if (rid === null) {
-      if (r.paused) return;
-      r.pauseTimer = this.env.setTimeout(() => {
-        r.pauseTimer = null;
+      if (want.paused) return;
+      want.timer = this.env.setTimeout(() => {
+        want.timer = null;
+        want.paused = true;
+        const r = this.remotes.get(trackName);
+        if (!r || r.pub.kind === 'audio' || r.pub.kind === 'screen-audio') return;
         r.paused = true;
         if (r.mid) void this.release([trackName]);
       }, PAUSE_AFTER_MS);
       return;
     }
-    if (r.pub.rids.length) r.rid = r.pub.rids.includes(rid) ? rid : ([...r.pub.rids].sort().find((x) => x >= rid) ?? r.pub.rids[0]);
+    want.rid = rid;
+    want.paused = false;
+    const r = this.remotes.get(trackName);
+    if (!r || r.pub.kind === 'audio' || r.pub.kind === 'screen-audio') return;
+    if (r.pub.rids.length) r.rid = layerFor(rid, r.pub.rids);
     const wasPaused = r.paused;
     r.paused = false;
     if (r.mid && r.pub.rids.length && r.asked !== r.rid) void this.changeLayer(trackName, r.rid);
@@ -463,6 +571,7 @@ export class MediaClient {
         });
       } catch (e) {
         if (epoch !== this.epoch) return;
+        if (this.lost(e)) return;
         if (e instanceof RoomServerError && e.code === 'unknown_publication') {
           // One of them has gone: ask again for those still in the room.
           for (const [n, r] of items) if (!this.pubs.some((p) => p.trackName === n && p.sessionId === r.pub.sessionId)) this.forget(n);
@@ -475,7 +584,8 @@ export class MediaClient {
       if (epoch !== this.epoch) return;
       for (const t of res.tracks) {
         const r = this.remotes.get(t.trackName);
-        if (!r) continue;
+        // The same publication, not one published again meanwhile under the same name.
+        if (!r || r.pub.sessionId !== t.publisherSessionId) continue;
         if (t.errorCode || !t.mid) {
           this.retryLater(t.trackName);
           continue;
@@ -492,22 +602,22 @@ export class MediaClient {
           await pc.setLocalDescription(answer);
           if (epoch !== this.epoch) return;
           await this.api.renegotiate({ sessionId: this.recvSession!, answer: sdp(pc.localDescription ?? answer) });
-        } catch {
-          if (epoch === this.epoch) void this.restart();
+        } catch (e) {
+          if (epoch === this.epoch && !this.lost(e)) this.recover();
           return;
         }
       }
-      // A track the SFU sent before its mid was known.
+      // A track the SFU sent before its mid was known (never one of a stopped transceiver, or ended).
       for (const t of pc.getTransceivers()) {
         const name = t.mid ? this.byMid.get(t.mid) : undefined;
-        if (name && !this.tracks.has(name) && t.receiver.track) this.arrived(t.mid, t.receiver.track);
+        if (name && !this.tracks.has(name) && t.currentDirection !== 'stopped' && t.receiver.track) this.arrived(t.mid, t.receiver.track);
       }
     });
   }
 
   private arrived(mid: string | null, track: MediaStreamTrack) {
     const name = mid ? this.byMid.get(mid) : undefined;
-    if (!name) return;
+    if (!name || track.readyState === 'ended') return;
     if (this.tracks.get(name) === track) return;
     this.tracks.set(name, track);
     this.onTrack?.(name, track);
@@ -545,8 +655,9 @@ export class MediaClient {
       try {
         const res = await this.api.layer({ sessionId: this.recvSession, tracks: [{ mid: r.mid, rid }] });
         if (!res.tracks[0]?.errorCode) r.asked = rid;
-      } catch {
-        // Stays on the layer it has.
+      } catch (e) {
+        // A lost session starts again; otherwise it stays on the layer it has.
+        if (epoch === this.epoch) this.lost(e);
       }
     });
   }
@@ -567,15 +678,17 @@ export class MediaClient {
         if (this.tracks.delete(n)) this.onTrack?.(n, null);
       }
       try {
-        for (const t of pc.getTransceivers()) if (t.mid && mids.includes(t.mid)) t.direction = 'inactive';
+        stopMids(pc, mids);
         const offer = await pc.createOffer();
         await pc.setLocalDescription(offer);
         if (epoch !== this.epoch) return;
         const res = await this.api.close({ sessionId: this.recvSession, offer: sdp(pc.localDescription ?? offer), tracks: mids.map((mid) => ({ mid })) });
         if (epoch !== this.epoch) return;
         await pc.setRemoteDescription(res.answer);
-      } catch {
-        // The SFU stops sending a closed session's tracks anyway.
+      } catch (e) {
+        // A lost session or a failed call: start again. Otherwise the SFU stops sending a closed
+        // session's tracks anyway.
+        if (epoch === this.epoch && this.lost(e)) return;
       }
       // Wanted again while it was being let go.
       for (const [, r] of items) if (this.wanted(r)) this.schedule();
@@ -586,7 +699,6 @@ export class MediaClient {
     const r = this.remotes.get(name);
     if (!r) return;
     if (r.retry) this.env.clearTimeout(r.retry);
-    if (r.pauseTimer) this.env.clearTimeout(r.pauseTimer);
     this.remotes.delete(name);
     if (r.mid) {
       const mid = r.mid;
@@ -597,13 +709,15 @@ export class MediaClient {
         const pc = this.recvPc;
         if (!pc || !this.recvSession || epoch !== this.epoch) return;
         try {
-          for (const t of pc.getTransceivers()) if (t.mid === mid) t.direction = 'inactive';
+          stopMids(pc, [mid]);
           const offer = await pc.createOffer();
           await pc.setLocalDescription(offer);
           const res = await this.api.close({ sessionId: this.recvSession, offer: sdp(pc.localDescription ?? offer), tracks: [{ mid }] });
           if (epoch === this.epoch) await pc.setRemoteDescription(res.answer);
-        } catch {
-          // Gone already (the server closes a withdrawn publication's tracks).
+        } catch (e) {
+          // A lost session or a failed call starts again; otherwise it's gone already (the server
+          // closes a withdrawn publication's tracks).
+          if (epoch === this.epoch) this.lost(e);
         }
       });
     }

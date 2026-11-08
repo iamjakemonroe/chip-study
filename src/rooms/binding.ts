@@ -10,6 +10,7 @@ import type { Mode } from '../lib/types.ts';
 import type { RoomBinding, RoomCode, RoomLists, RoomSheet } from '../workspace/roomBinding.ts';
 import { colorFor } from './people.ts';
 import { addColumn, addRow, readGrid, removeLastColumn, removeLastRow, setCell, watchSheet, type YSheet } from './ysheet.ts';
+import { applyTextEdit, sharedText, textField } from './ytext.ts';
 import type { YRoom } from './ysync.ts';
 
 /** The room's side of the workspace's editors (src/workspace/roomBinding.ts): TipTap and CodeMirror
@@ -93,18 +94,28 @@ export function makeBinding(o: BindingOptions): RoomBinding {
     const m = doc.getMap(YDOC.documents).get(id);
     return m instanceof Y.Map ? m : null;
   };
+  // Whether this screen may write is checked as it writes: a viewer let in to edit can edit at
+  // once, with the sheets and code already open (their binding was made before).
   const write = (fn: () => void) => {
-    if (o.canEdit) doc.transact(fn);
+    if (y.editable && y.doc === doc) doc.transact(fn);
+  };
+  const entry = (name: string, id: string) => {
+    const arr = doc.getArray<Y.Map<unknown>>(name);
+    const m = arr.get(findIndex(arr, id));
+    return m instanceof Y.Map ? m : null;
   };
 
   const lists: RoomLists = {
-    addNote: (body) => write(() => doc.getArray<Y.Map<unknown>>(YDOC.notes).insert(0, [entryOf({ id: crypto.randomUUID(), body, pinned: false })])),
+    addNote: (body) => write(() => doc.getArray<Y.Map<unknown>>(YDOC.notes).insert(0, [entryOf({ id: crypto.randomUUID(), body: sharedText(body), pinned: false })])),
+    editNoteBody: (id, from, to) =>
+      write(() => {
+        const m = entry(YDOC.notes, id);
+        if (m) applyTextEdit(textField(m, 'body'), from, to);
+      }),
     updateNote: (id, patch) =>
       write(() => {
-        const arr = doc.getArray<Y.Map<unknown>>(YDOC.notes);
-        const m = arr.get(findIndex(arr, id));
-        if (!(m instanceof Y.Map)) return;
-        for (const [k, v] of Object.entries(patch)) if (v !== undefined && m.get(k) !== v) m.set(k, v);
+        const m = entry(YDOC.notes, id);
+        if (m && patch.pinned !== undefined && m.get('pinned') !== patch.pinned) m.set('pinned', patch.pinned);
       }),
     removeNote: (id) =>
       write(() => {
@@ -112,13 +123,18 @@ export function makeBinding(o: BindingOptions): RoomBinding {
         const i = findIndex(arr, id);
         if (i >= 0) arr.delete(i, 1);
       }),
-    addTasks: (tasks) => write(() => doc.getArray<Y.Map<unknown>>(YDOC.tasks).push(tasks.map((t) => entryOf({ id: crypto.randomUUID(), title: t.title, due_on: t.due, done: false })))),
+    addTasks: (tasks) => write(() => doc.getArray<Y.Map<unknown>>(YDOC.tasks).push(tasks.map((t) => entryOf({ id: crypto.randomUUID(), title: sharedText(t.title), due_on: t.due, done: false })))),
+    editTaskTitle: (id, from, to) =>
+      write(() => {
+        const m = entry(YDOC.tasks, id);
+        if (m) applyTextEdit(textField(m, 'title'), from, to);
+      }),
     updateTask: (id, patch) =>
       write(() => {
-        const arr = doc.getArray<Y.Map<unknown>>(YDOC.tasks);
-        const m = arr.get(findIndex(arr, id));
-        if (!(m instanceof Y.Map)) return;
-        for (const [k, v] of Object.entries(patch)) if (v !== undefined && m.get(k) !== v) m.set(k, v);
+        const m = entry(YDOC.tasks, id);
+        if (!m) return;
+        if (patch.due_on !== undefined && m.get('due_on') !== patch.due_on) m.set('due_on', patch.due_on);
+        if (patch.done !== undefined && m.get('done') !== patch.done) m.set('done', patch.done);
       }),
     removeTask: (id) =>
       write(() => {
@@ -157,7 +173,7 @@ export function makeBinding(o: BindingOptions): RoomBinding {
         removeColumn: () => write(() => removeLastColumn(rows)),
         setHeader: (on) => write(() => meta(id)?.set('header', on)),
         watch: (onChange) => {
-          const stop = watchSheet(rows, onChange, () => o.canEdit);
+          const stop = watchSheet(rows, onChange, () => y.editable && y.doc === doc);
           const m = meta(id);
           const onMeta = () => onChange();
           m?.observe(onMeta);

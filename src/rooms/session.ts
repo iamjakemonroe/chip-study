@@ -181,7 +181,8 @@ export class RoomSession {
         });
         this.y.setUser({ id: m.you.userId, name: m.you.name, color: '#6457f0' });
         this.y.setCanEdit(m.you.canEdit);
-        this.media.setPubs(m.publications);
+        // Also notices a session the server has forgotten (after a sleep, say).
+        this.media.hello(m.publications);
         void this.firstHello();
         return;
       }
@@ -488,8 +489,14 @@ export class RoomSession {
         try {
           track = await getMic(this.devices.mic);
         } catch (e) {
+          if (this.stopped) return false;
           const p = problemText(problemOf(e), 'microphone');
           toast(`${p.title}. ${p.body}`, 'warn');
+          return false;
+        }
+        // Left while the browser was asking: the microphone goes straight off again.
+        if (this.stopped) {
+          track.stop();
           return false;
         }
         this.o.mic = track;
@@ -513,8 +520,13 @@ export class RoomSession {
       try {
         track = await getCamera(this.devices.camera);
       } catch (e) {
+        if (this.stopped) return false;
         const p = problemText(problemOf(e), 'camera');
         toast(`${p.title}. ${p.body}`, 'warn');
+        return false;
+      }
+      if (this.stopped) {
+        track.stop();
         return false;
       }
       this.o.cam = track;
@@ -535,7 +547,12 @@ export class RoomSession {
       try {
         got = await getScreen();
       } catch (e) {
-        if (problemOf(e) !== 'denied') toast('Your screen couldn’t be shared. Try again.', 'warn');
+        if (!this.stopped && problemOf(e) !== 'denied') toast('Your screen couldn’t be shared. Try again.', 'warn');
+        return;
+      }
+      if (this.stopped) {
+        got.video.stop();
+        got.audio?.stop();
         return;
       }
       this.screenTracks = got;
@@ -570,6 +587,7 @@ export class RoomSession {
     try {
       if (kind === 'mic') {
         const track = await getMic(deviceId);
+        if (this.stopped) return track.stop();
         const old = this.o.mic;
         track.enabled = s.mic;
         this.o.mic = track;
@@ -582,6 +600,7 @@ export class RoomSession {
         old?.stop();
       } else if (s.cam) {
         const track = await getCamera(deviceId);
+        if (this.stopped) return track.stop();
         const old = s.localVideo;
         this.o.cam = track;
         useRoom.setState({ localVideo: track });

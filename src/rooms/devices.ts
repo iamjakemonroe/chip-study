@@ -135,6 +135,22 @@ function audioContext(): AudioContext | null {
   return shared;
 }
 
+/** Lets sound play: called during a tap (Join), as Safari wants. Wakes the shared AudioContext and
+ * plays a moment of silence through it. */
+export function unlockAudio(): void {
+  try {
+    const ctx = audioContext();
+    if (!ctx) return;
+    if (ctx.state === 'suspended') void ctx.resume().catch(() => undefined);
+    const source = ctx.createBufferSource();
+    source.buffer = ctx.createBuffer(1, 1, 22050);
+    source.connect(ctx.destination);
+    source.start(0);
+  } catch {
+    // Nothing to wake: the room's "Tap to hear the room" covers it.
+  }
+}
+
 /** How loud [track] is, 0 to 1, read as often as asked (cheap). Answers a reader and a stop. */
 export function levelMeter(track: MediaStreamTrack): { level: () => number; stop: () => void } {
   const ctx = audioContext();

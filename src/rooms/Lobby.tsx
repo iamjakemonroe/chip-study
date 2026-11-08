@@ -16,6 +16,7 @@ import {
   problemText,
   saveChoice,
   savedChoice,
+  unlockAudio,
   type DeviceChoice,
   type DeviceProblem,
   type Devices,
@@ -45,7 +46,8 @@ export interface LobbyProps {
   /** Shown above the Join button (waiting to be let in, an error). */
   status?: ReactNode;
   disabled?: boolean;
-  onJoin: (r: LobbyResult) => void;
+  /** Answers false when joining failed in a way worth trying again: the lobby keeps its devices. */
+  onJoin: (r: LobbyResult) => Promise<boolean> | void;
   onBack: () => void;
 }
 
@@ -186,10 +188,18 @@ export function Lobby(p: LobbyProps) {
   };
 
   const join = () => {
+    // The tap that joins is the one Safari needs before the room's sound can play.
+    unlockAudio();
     tracks.current.handed = true;
     tracks.current.gone = true;
     saveChoice(choice);
-    p.onJoin({ mic, micOn: micWant === 'on' && !!mic, cam, camOn: camWant === 'on' && !!cam, devices: choice });
+    void Promise.resolve(p.onJoin({ mic, micOn: micWant === 'on' && !!mic, cam, camOn: camWant === 'on' && !!cam, devices: choice })).then((ok) => {
+      // Not in (offline, say): the lobby still has its camera and microphone, live, for Join again.
+      if (ok === false) {
+        tracks.current.handed = false;
+        tracks.current.gone = false;
+      }
+    });
   };
 
   const asked = camWant !== 'idle' || micWant !== 'idle' || !!cam || !!mic;

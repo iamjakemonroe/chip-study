@@ -4,6 +4,7 @@ import * as Y from 'yjs';
 import { YDOC } from '../../shared/rooms.ts';
 import type { RoomWorkspace } from './api.ts';
 import { fillSheet, type Grid } from './ysheet.ts';
+import { sharedText } from './ytext.ts';
 
 /** Filling an empty room with the host's work (docs/rooms.md, "Seeding"): every shared type in one
  * Yjs transaction, with `room.seeded = true` in the same one, so the room either has all of it or
@@ -65,9 +66,10 @@ export function seedRoom(doc: Y.Doc, w: RoomWorkspace, schema: Schema, origin: u
       }
     }
     const notes = doc.getArray<Y.Map<unknown>>(YDOC.notes);
-    if (w.notes.length) notes.push(w.notes.map((n) => entry({ id: n.id, body: n.body ?? '', pinned: !!n.pinned })));
+    // Notes' bodies and tasks' titles are shared texts, so two people's edits merge.
+    if (w.notes.length) notes.push(w.notes.map((n) => entry({ id: n.id, body: sharedText(n.body ?? ''), pinned: !!n.pinned })));
     const tasks = doc.getArray<Y.Map<unknown>>(YDOC.tasks);
-    if (w.tasks.length) tasks.push(w.tasks.map((t) => entry({ id: t.id, title: t.title ?? '', due_on: t.due_on ?? null, done: !!t.done })));
+    if (w.tasks.length) tasks.push(w.tasks.map((t) => entry({ id: t.id, title: sharedText(t.title ?? ''), due_on: t.due_on ?? null, done: !!t.done })));
     doc.getMap(YDOC.room).set('seeded', true);
     filled = true;
   }, origin);

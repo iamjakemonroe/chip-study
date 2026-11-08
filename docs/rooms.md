@@ -59,7 +59,7 @@ Every HTTP call carries `Authorization: Bearer <Supabase access token>`. The Wor
 |---|---|---|
 | `POST /ticket` | none | `{ticket}`: single use, 60 s. Refused with 409 `room_full` when `max_people` distinct people are connected and the caller isn't one of them. |
 | `GET /ws?ticket=` | WebSocket upgrade | the room socket (below) |
-| `GET /turn` | none | `{iceServers}`: Cloudflare TURN credentials, TTL 1 h, with port 53 URLs removed |
+| `GET /turn` | none | `{iceServers}`: Cloudflare TURN credentials, TTL 24 h (`ROOM.turnTtlSeconds`), with port 53 URLs removed |
 | `POST /rtc/session` | `{purpose: "publish" \| "receive"}` | `{sessionId}` |
 | `POST /rtc/publish` | `{sessionId, offer, tracks: [{mid, trackName, kind: "audio" \| "video" \| "screen" \| "screen-audio", rids?: ("f" \| "h" \| "q")[]}]}` | `{answer, tracks}`. Successful tracks become publications in the room's discovery state and are announced on the socket. |
 | `POST /rtc/receive` | `{sessionId, tracks: [{publisherSessionId, trackName, rid?}]}` | `{offer?, requiresImmediateRenegotiation, tracks}` |
@@ -133,8 +133,8 @@ Close codes: 4001 bad or used ticket (get a new one), 4003 removed, 4009 room fu
 | `Y.XmlFragment` | `doc/<id>` | a TipTap document (`@tiptap/extension-collaboration` with `fragment`) |
 | `Y.Text` | `code/<id>` | a code document's text (y-codemirror.next) |
 | `Y.Array<Y.Array<string>>` | `sheet/<id>` | a sheet's rows of cells |
-| `Y.Array<Y.Map>` | `notes` | `{id, body, pinned}` |
-| `Y.Array<Y.Map>` | `tasks` | `{id, title, due_on, done}` |
+| `Y.Array<Y.Map>` | `notes` | `{id, body, pinned}`, `body` a `Y.Text` (a plain string is read too) |
+| `Y.Array<Y.Map>` | `tasks` | `{id, title, due_on, done}`, `title` a `Y.Text` (a plain string is read too) |
 
 **Seeding.** The first editor to connect to an empty room gets `{t: "seed"}`. They load `study_room_workspace`, fill every type above in one Yjs transaction (setting `room.seeded = true` in the same transaction), then send `{t: "seeded"}`. Only one person is asked at a time. If they disconnect before seeding, the next editor is asked. So is the next editor if the one asked hasn't seeded within 60 seconds, so the seeder must check `room.seeded` just before filling (someone asked earlier may have finished meanwhile). The room counts as seeded when the document says so; `{t: "seeded"}` only confirms it (answered with `{t: "error", code: "not_seeded"}` if the document doesn't).
 
@@ -207,7 +207,7 @@ The vars in `wrangler.jsonc` start as `REPLACE_…` placeholders. Until `SUPABAS
 - Import the message and request types, limits and Yjs names from `shared/rooms.ts`. Don't restate them.
 - `public/_headers` sends `Permissions-Policy: camera=(), microphone=()`, which blocks the camera and microphone on every page. The room screens must change it to allow them for the site itself, for example `camera=(self), microphone=(self), display-capture=(self)`.
 - Open the socket with a fresh ticket each time, including on reconnect. Send `"ping"` about every 20 seconds to keep proxies from closing an idle socket. It is answered without waking the room.
-- TURN credentials last an hour. Fetch `/turn` again before then, and give the new servers to `pc.setConfiguration()`.
+- TURN credentials last 24 hours (`ROOM.turnTtlSeconds`), so a call's relay doesn't lose its credentials mid-call (new ones only reach new ICE candidates). The screens still fetch `/turn` again halfway through and give the new servers to `pc.setConfiguration()`.
 - Open the room socket before any media: making sessions, publishing and receiving need it. Use separate `publish` and `receive` sessions (one PeerConnection each). When a connection fails, or the socket was gone for more than 30 seconds, make new sessions, publish again and subscribe again.
 - A publication is announced as soon as the SFU accepts it, which can be a moment before the publisher's connection carries media. A receive whose track comes back with an `errorCode` can be tried again shortly.
 - Subscribe to new entries in `pubs`, and stop showing ones that leave it. Ask for `q` on tiles, `h` on large tiles, and `f` on the stage, with `/rtc/layer` when that changes.
@@ -221,10 +221,15 @@ These follow from the contract above; none of them changes its shape.
 - **A viewer never sends sync updates or step 2.** A screen that can't edit keeps any change it makes (there shouldn't be one; the editors are read-only) to itself and marks its copy spoiled. It starts a fresh `Y.Doc` on `{t: "readonly"}`, on `already_seeded`, on losing edit rights, and on gaining edit rights with a spoiled copy. After three fresh documents on one socket it reconnects, so it stays within the server's four awareness ids per socket.
 - **Shared editors add nothing by themselves.** In a room, TipTap runs without its own undo history (the collaboration binding keeps it) and without the trailing-paragraph extension, which would otherwise add one paragraph per person at the same moment. Only an editor's screen updates citation labels.
 - **Sheets repair concurrent edits.** Two people changing the same cell at once would each insert a value and push the row's later cells a column right. Cells inserted at the same place at the same time share Yjs's left neighbour (`origin`), which never happens otherwise, so every editor's screen keeps the first and deletes the rest (deleting twice is harmless), and fills out short rows. See `src/rooms/ysheet.ts`.
+- **Notes and task titles merge.** A note's `body` and a task's `title` are `Y.Text`, changed by the edit someone made (from the text they saw to their new text), so two people changing one note both keep their words; words someone else changed meanwhile are never deleted. The server already reads a `Y.Text` there as its text.
+- **Edit rights are checked when writing.** A viewer let in to edit can edit sheets, code settings, notes and tasks at once, without the editors being made again.
 - **New rows keep client-made UUIDs**, as the server expects: new notes, tasks and documents get `crypto.randomUUID()`. Rooms can add and rename documents, but not delete them, because a save never deletes a document.
 - **Names.** Cursor labels and tiles use the roster (`hello`/`people`), looked up by the awareness `user.id` the server verified; a screen's own `user.name` and `user.color` in awareness are ignored. Colours come from the user ID.
 - **Chip's message id.** `study_room_log_use`'s `p_message` must be the database id of Chip's message, which only the asker's screen knows (the function's `done` event). Other editors log with `p_message: null`.
 - **Chunks** go at least 260 ms apart (a little over the server's 250 ms), and the latest text is always sent when the gap is over.
-- **Video layers.** Every tile, the stage and anything else on screen showing a publication says which layer it wants; the best wanted is asked for (`f` beats `h` beats `q`), and a video no tile shows is let go after three seconds off screen (closed at the SFU, received again when it's back).
+- **Video layers.** Every tile, the stage and anything else on screen showing a publication says which layer it wants; the best wanted is asked for (`f` beats `h` beats `q`), and a video no tile shows is let go after three seconds off screen (closed at the SFU, received again when it's back). What's wanted is kept by track name, so someone who publishes again (a new session, the same name) comes back on the same layer, or still paused.
+- **Closing tracks** follows Cloudflare: keep the mid, `transceiver.stop()`, then offer. A received track that has ended, or whose transceiver is stopped, never counts as arrived. Receive results are matched by track name and publisher session.
+- **Media starts again** (new sessions, publish, subscribe) after a connection fails, after a socket gap over 30 seconds, on a 403 `not_your_session`, when `hello` lists none of this screen's publications on its current publish session while it has some published (a gap measured wrong after a sleep), and when a publish, receive, layer or close call fails on the way (5xx, offline, or no answer in 20 seconds). Restarts for errors are at least 5 seconds apart. If starting fails (409 `not_connected`, say), it's tried again after 2, 5, 10, 20 and then every 30 seconds, and at once when the socket opens.
+- **Sound.** Joining is the tap that unlocks audio (the shared AudioContext is woken then). If the browser still refuses to play the room's sound, the room shows "Tap to hear the room".
 - **The lobby's connection check** times a small request to the site (the room server is the same Worker) and, unless `VITE_ROOMS_STUN` is empty, looks for a STUN answer from `stun:stun.cloudflare.com:3478`. TURN credentials need someone who's in the room, so they're checked only on entering.
 - **Waiting room.** A screen whose join answers `waiting` calls `study_room_join` again every four seconds (it answers the same membership) until it's `in`. Hosts and co-hosts read `study_room_get` every six seconds while in the room, to see who's waiting.

@@ -1,5 +1,5 @@
 import { AnimatePresence, motion } from 'framer-motion';
-import { CloudOff, DoorClosed, Info, ListChecks, MessageSquare, NotebookPen, RefreshCw, ScrollText, Sparkles, Timer, UserPlus, Users, WifiOff, X } from 'lucide-react';
+import { CloudOff, DoorClosed, Info, ListChecks, MessageSquare, NotebookPen, RefreshCw, ScrollText, Sparkles, Timer, UserPlus, Users, Volume2, WifiOff, X } from 'lucide-react';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { Logo } from '../components/Logo.tsx';
@@ -24,7 +24,7 @@ import { RoomWorkspace } from './RoomWorkspace.tsx';
 import { roomSession, RoomSession } from './session.ts';
 import { ShareSheet } from './ShareSheet.tsx';
 import { openPanel, useRoom, type RoomEnd, type RoomPanel } from './store.ts';
-import { RoomAudio, Stage, TileStrip, useStage } from './Tiles.tsx';
+import { hearTheRoom, RoomAudio, Stage, TileStrip, useStage } from './Tiles.tsx';
 
 const ease = [0.2, 0.7, 0.1, 1] as const;
 
@@ -280,6 +280,7 @@ function Banners() {
   const host = useRoom((s) => s.hostName);
   const you = useRoom((s) => s.you);
   const tier = useAuth((s) => s.me?.tier);
+  const audioBlocked = useRoom((s) => s.audioBlocked);
   const [late, setLate] = useState(false);
   const [mediaSeen, setMediaSeen] = useState(false);
   const [endingSeen, setEndingSeen] = useState(false);
@@ -292,6 +293,20 @@ function Banners() {
   }, [connection]);
 
   const items: { key: string; tone: 'warn' | 'info' | 'soon'; icon: ReactNode; text: ReactNode; close?: () => void }[] = [];
+  if (audioBlocked)
+    items.push({
+      key: 'sound',
+      tone: 'info',
+      icon: <Volume2 size={15} />,
+      text: (
+        <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
+          Your browser is holding back the room’s sound.
+          <button className="btn btn-primary btn-sm h-8" onClick={hearTheRoom}>
+            Tap to hear the room
+          </button>
+        </span>
+      ),
+    });
   if (!online) items.push({ key: 'offline', tone: 'warn', icon: <WifiOff size={15} />, text: 'You’re offline. Your changes are kept here and go to the room when you’re back.' });
   else if (late)
     items.push({ key: 'reconnecting', tone: 'warn', icon: <RefreshCw size={15} className="animate-spin" />, text: 'Reconnecting to the room… Your changes are kept and sync when it’s back.' });

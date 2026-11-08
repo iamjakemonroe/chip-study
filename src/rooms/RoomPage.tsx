@@ -43,6 +43,11 @@ function RoomFlow({ token }: { token: string }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const waitTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** The page is still open (a poll that answers after it closed does nothing more). */
+  const alive = useRef(true);
+  /** The camera and microphone the lobby handed over while waiting to be let in: stopped if the
+   * page closes before the room takes them. */
+  const held = useRef<LobbyResult | null>(null);
 
   const look = useCallback(async () => {
     setPhase({ k: 'peek' });
@@ -66,26 +71,51 @@ function RoomFlow({ token }: { token: string }) {
   useEffect(() => {
     document.title = 'Study room · Chip Study';
     void look();
-    return () => {
-      if (waitTimer.current) clearTimeout(waitTimer.current);
-    };
   }, [look]);
 
-  const join = async (media: LobbyResult) => {
+  // Leaving by any way (a link in the header, Back): no poll goes on, no camera stays on.
+  useEffect(() => {
+    alive.current = true;
+    return () => {
+      alive.current = false;
+      if (waitTimer.current) clearTimeout(waitTimer.current);
+      if (held.current) stopTracks(held.current);
+      held.current = null;
+    };
+  }, []);
+
+  const enter = (r: JoinResult, media: LobbyResult) => {
+    held.current = null; // the room has them now
+    setPhase({ k: 'room', join: r, media });
+  };
+
+  /** Answers whether it went in (or to the waiting room): on a failure worth trying again (offline,
+   * say) the lobby keeps its camera and microphone for the next try. */
+  const join = async (media: LobbyResult): Promise<boolean> => {
     setBusy(true);
     setError('');
     try {
       const r = await joinRoom(token);
+      if (!alive.current) {
+        stopTracks(media);
+        return true;
+      }
       if (r.state === 'waiting') {
+        held.current = media;
         setPhase({ k: 'waiting', join: media });
         pollWaiting(media);
-      } else setPhase({ k: 'room', join: r, media });
+      } else enter(r, media);
+      return true;
     } catch (e) {
-      stopTracks(media);
-      if (e instanceof RoomRefused) setPhase({ k: 'refused', reason: e.reason });
-      else setError((e as Error).message);
+      if (e instanceof RoomRefused) {
+        stopTracks(media);
+        setPhase({ k: 'refused', reason: e.reason });
+        return true;
+      }
+      setError((e as Error).message);
+      return false;
     } finally {
-      setBusy(false);
+      if (alive.current) setBusy(false);
     }
   };
 
@@ -95,20 +125,24 @@ function RoomFlow({ token }: { token: string }) {
     waitTimer.current = setTimeout(async () => {
       try {
         const r = await joinRoom(token);
-        if (r.state === 'in') return setPhase({ k: 'room', join: r, media });
+        if (!alive.current) return;
+        if (r.state === 'in') return enter(r, media);
       } catch (e) {
+        if (!alive.current) return;
         if (e instanceof RoomRefused) {
           stopTracks(media);
+          held.current = null;
           return setPhase({ k: 'refused', reason: e.reason });
         }
       }
-      pollWaiting(media);
+      if (alive.current) pollWaiting(media);
     }, WAIT_POLL_MS);
   };
 
   const leaveWaiting = (media: LobbyResult) => {
     if (waitTimer.current) clearTimeout(waitTimer.current);
     stopTracks(media);
+    held.current = null;
     navigate('/app');
   };
 
@@ -199,7 +233,7 @@ function RoomFlow({ token }: { token: string }) {
             </p>
           ) : null
         }
-        onJoin={(r) => void join(r)}
+        onJoin={(r) => join(r)}
         onBack={() => navigate('/app')}
       />
     );

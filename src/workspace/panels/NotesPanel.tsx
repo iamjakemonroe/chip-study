@@ -1,5 +1,6 @@
 import { Pin, PinOff, Plus, Trash2 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
+import { mapIndex } from '../../lib/textEdit.ts';
 import { AutoTextarea } from '../../components/ui.tsx';
 import { addNote, deleteNote, updateNote } from '../../lib/api.ts';
 import { ago } from '../../lib/dates.ts';
@@ -61,28 +62,36 @@ function NoteCard({ note, onChange }: { note: Note; onChange: (n: Note) => void 
   const room = useRoomBinding();
   const canEdit = room ? room.canEdit : true;
   const [body, setBody] = useState(note.body);
-  const typing = useRef(false);
-  // In a room, someone else's change shows, unless you're typing in this note.
+  const field = useRef<HTMLTextAreaElement | null>(null);
+  // In a room the note is shared: everyone's typing shows as it happens (your caret stays where it
+  // was), and each change you make goes in as an edit, merged with theirs.
   useEffect(() => {
-    if (!typing.current) setBody(note.body);
-  }, [note.body]);
+    if (!room) return;
+    setBody((shown) => {
+      if (shown === note.body) return shown;
+      const el = field.current;
+      if (el && document.activeElement === el) {
+        const [a, b] = [el.selectionStart, el.selectionEnd];
+        requestAnimationFrame(() => el.setSelectionRange(mapIndex(shown, note.body, a), mapIndex(shown, note.body, b)));
+      }
+      return note.body;
+    });
+  }, [note.body]); // eslint-disable-line react-hooks/exhaustive-deps
   return (
     <li className={`group rounded-2xl border p-3 ${note.pinned ? 'border-sand/40 bg-sand-soft/60' : 'border-line bg-white'}`}>
       <AutoTextarea
         value={body}
-        onChange={setBody}
+        onChange={(next) => {
+          if (room) room.lists.editNoteBody(note.id, body, next);
+          setBody(next);
+        }}
         maxRows={14}
         className="w-full resize-none bg-transparent text-[0.9375rem] leading-relaxed outline-none"
         aria-label="Note"
         readOnly={!canEdit}
-        onFocus={() => (typing.current = true)}
+        onFocus={(e) => (field.current = e.currentTarget)}
         onBlur={async () => {
-          typing.current = false;
-          if (body === note.body) return;
-          if (room) {
-            room.lists.updateNote(note.id, { body });
-            return;
-          }
+          if (room || body === note.body) return;
           try {
             await updateNote(note.id, { body });
             onChange({ ...note, body });

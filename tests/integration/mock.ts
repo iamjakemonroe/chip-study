@@ -5,7 +5,7 @@
  *  - Cloudflare TURN (credentials, including the port 53 URLs the server must drop). */
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import type { AddressInfo } from 'node:net';
-import type { EditMode, Role } from '../../shared/rooms';
+import { ROOM, type EditMode, type Role } from '../../shared/rooms';
 
 export interface MockMember {
   token: string;
@@ -231,7 +231,7 @@ export class Mock {
 
   private turn(req: IncomingMessage, res: ServerResponse, path: string, body: Record<string, unknown> | undefined): void {
     if (req.headers.authorization !== `Bearer ${this.turnToken}`) return send(res, 401, { error: 'unauthorized' });
-    if (path !== `/turn/v1/turn/keys/${this.turnKeyId}/credentials/generate-ice-servers` || body?.ttl !== 3600) return send(res, 400, { error: 'bad request' });
+    if (path !== `/turn/v1/turn/keys/${this.turnKeyId}/credentials/generate-ice-servers` || body?.ttl !== ROOM.turnTtlSeconds) return send(res, 400, { error: 'bad request' });
     send(res, 201, {
       iceServers: [
         { urls: ['stun:stun.cloudflare.com:3478', 'stun:stun.cloudflare.com:53'] },

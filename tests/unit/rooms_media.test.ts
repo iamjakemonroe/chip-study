@@ -4,9 +4,9 @@
 // a long socket gap or a failed connection, TURN refreshed within the hour, and video paused for
 // tiles off screen.
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { Publication, PublishRequest, ReceiveAnswer, ReceiveRequest } from '../../shared/rooms';
+import { ROOM, type Publication, type PublishRequest, type ReceiveAnswer, type ReceiveRequest } from '../../shared/rooms';
 import { RoomServerError } from '../../src/rooms/errors';
-import { MediaClient, PAUSE_AFTER_MS, RETRY_MS, SerialQueue, TURN_REFRESH_MS, type MediaApi, type MediaEnv } from '../../src/rooms/media';
+import { MediaClient, PAUSE_AFTER_MS, RECOVER_GAP_MS, RETRY_MS, SerialQueue, START_RETRY_MS, TURN_REFRESH_MS, type MediaApi, type MediaEnv } from '../../src/rooms/media';
 
 const ME = 'me-0000';
 
@@ -27,12 +27,16 @@ class FakeTransceiver {
 
 class FakePC {
   static all: FakePC[] = [];
+  /** Mids whose received track arrives already ended. */
+  static ended = new Set<string>();
   transceivers: FakeTransceiver[] = [];
   ontrack: ((e: { transceiver: FakeTransceiver; track: unknown }) => void) | null = null;
   onconnectionstatechange: (() => void) | null = null;
   connectionState = 'new';
   localDescription: RTCSessionDescriptionInit | null = null;
   closed = false;
+  /** How many transceivers were stopped when each offer was made. */
+  stoppedAtOffer: number[] = [];
   private mid = 0;
   constructor(public config: RTCConfiguration) {
     FakePC.all.push(this);
@@ -45,6 +49,7 @@ class FakePC {
     return t;
   }
   async createOffer() {
+    this.stoppedAtOffer.push(this.transceivers.filter((t) => t.stopped).length);
     return { type: 'offer' as const, sdp: `offer:${this.transceivers.length}` };
   }
   async createAnswer() {
@@ -61,7 +66,7 @@ class FakePC {
       if (this.transceivers.some((t) => t.mid === mid)) continue;
       const t = new FakeTransceiver();
       t.mid = mid;
-      t.receiver.track = { id: `track-${mid}` };
+      t.receiver.track = { id: `track-${mid}`, readyState: FakePC.ended.has(mid) ? 'ended' : 'live' };
       this.transceivers.push(t);
       this.ontrack?.({ transceiver: t, track: t.receiver.track });
     }
@@ -101,6 +106,7 @@ function manualEnv(): MediaEnv & { advance: (ms: number) => Promise<void> } {
     clearTimeout: (t) => {
       timers = timers.filter((x) => x.id !== t);
     },
+    now: () => now,
     advance: async (ms) => {
       await settle();
       const until = now + ms;
@@ -164,6 +170,7 @@ const track = (kind: string) => ({ kind, id: `local-${kind}` }) as unknown as Me
 
 afterEach(() => {
   FakePC.all = [];
+  FakePC.ended.clear();
 });
 
 describe('the media client', () => {
@@ -227,9 +234,11 @@ describe('the media client', () => {
     expect(api.publish).toHaveBeenCalledTimes(2);
     expect(pubPc.transceivers[1].sender.replaceTrack).toHaveBeenCalled();
 
-    // Withdrawing closes it at the SFU.
+    // Withdrawing closes it at the SFU, Cloudflare's way: the transceiver is stopped before the offer.
     await media.unpublish('video');
     expect(api.close).toHaveBeenCalledWith(expect.objectContaining({ tracks: [{ mid: 'p1' }] }));
+    expect(pubPc.transceivers[1].stopped).toBe(true);
+    expect(pubPc.stoppedAtOffer.at(-1)).toBe(1);
     expect(media.published('video')).toBe(false);
   });
 
@@ -387,7 +396,8 @@ describe('the media client', () => {
     const { api } = fakeApi();
     const media = new MediaClient(api, ME, env);
     await media.start();
-    expect(TURN_REFRESH_MS).toBeLessThan(60 * 60_000);
+    expect(ROOM.turnTtlSeconds).toBe(86_400);
+    expect(TURN_REFRESH_MS).toBeLessThan(ROOM.turnTtlSeconds * 1000);
     await env.advance(TURN_REFRESH_MS + 10);
     expect(api.turn).toHaveBeenCalledTimes(2);
     for (const pc of FakePC.all) expect(pc.config.iceServers?.[0]).toMatchObject({ username: 'u2' });
@@ -407,5 +417,155 @@ describe('the media client', () => {
     await media.publish('audio', track('audio'));
     expect(api.publish).not.toHaveBeenCalled();
     expect(api.session).not.toHaveBeenCalled();
+  });
+});
+
+
+describe('the media client, recovering', () => {
+  it('stops a received transceiver before offering to close it, and never counts an ended track', async () => {
+    const env = manualEnv();
+    const { api } = fakeApi();
+    const media = new MediaClient(api, ME, env);
+    const got: string[] = [];
+    media.onTrack = (name, t) => t && got.push(name);
+    FakePC.ended.add('11');
+    await media.start();
+    media.setPubs([pub('ann', 'video'), pub('ann', 'audio')]);
+    await env.advance(50);
+    // mid 10 is ann:video (live), mid 11 is ann:audio (arrived ended).
+    expect(got).toEqual(['ann:video']);
+    media.setPubs([pub('ann', 'audio')]);
+    await env.advance(0);
+    const recv = FakePC.all[1];
+    expect(recv.transceivers.find((t) => t.mid === '10')!.stopped).toBe(true);
+    expect(recv.stoppedAtOffer.at(-1)).toBeGreaterThanOrEqual(1);
+  });
+
+  it('starts again when the server no longer knows this screen’s session (403 not_your_session)', async () => {
+    const env = manualEnv();
+    const { api } = fakeApi();
+    const media = new MediaClient(api, ME, env);
+    await media.start();
+    api.receive.mockRejectedValueOnce(new RoomServerError(403, 'not_your_session'));
+    media.setPubs([pub('bea', 'audio')]);
+    await env.advance(50);
+    expect(api.session).toHaveBeenCalledTimes(4);
+    await env.advance(50);
+    expect(media.track('bea:audio')).not.toBeNull();
+  });
+
+  it('starts again when the room’s hello lists none of the publications it has made', async () => {
+    const env = manualEnv();
+    const { api } = fakeApi();
+    const media = new MediaClient(api, ME, env);
+    await media.start();
+    await media.publish('audio', track('audio'));
+    const session = (api.publish.mock.calls[0][0] as PublishRequest).sessionId;
+    // A hello that still has it: nothing happens.
+    media.hello([{ userId: ME, sessionId: session, trackName: `${ME}:audio`, kind: 'audio', rids: [] }]);
+    await env.advance(50);
+    expect(api.session).toHaveBeenCalledTimes(2);
+    // A hello after the server forgot it (the socket was away longer than it seemed).
+    media.hello([]);
+    await env.advance(50);
+    expect(api.session).toHaveBeenCalledTimes(4);
+    expect(api.publish).toHaveBeenCalledTimes(2);
+  });
+
+  it('tries again with growing gaps when starting fails, and at once when the socket is back', async () => {
+    const env = manualEnv();
+    const { api } = fakeApi();
+    api.session.mockRejectedValueOnce(new RoomServerError(409, 'not_connected')).mockRejectedValueOnce(new RoomServerError(409, 'not_connected'));
+    const media = new MediaClient(api, ME, env);
+    await media.start().catch(() => undefined);
+    expect(media.state).toBe('failed');
+    await env.advance(START_RETRY_MS[0] + 10);
+    expect(media.state).toBe('ready');
+    // And a failed start is tried again straight away when the socket opens.
+    const env2 = manualEnv();
+    const f2 = fakeApi();
+    f2.api.session.mockRejectedValueOnce(new RoomServerError(409, 'not_connected'));
+    const m2 = new MediaClient(f2.api, ME, env2);
+    await m2.start().catch(() => undefined);
+    expect(m2.state).toBe('failed');
+    m2.socketBack(1000);
+    await env2.advance(10);
+    expect(m2.state).toBe('ready');
+  });
+
+  it('a restart while a start is still on its way isn’t stuck with the old one', async () => {
+    const env = manualEnv();
+    const { api } = fakeApi();
+    let release!: () => void;
+    const held = new Promise<void>((r) => (release = r));
+    api.turn.mockImplementationOnce(async () => {
+      await held;
+      return [];
+    });
+    const media = new MediaClient(api, ME, env);
+    const first = media.start();
+    await env.advance(0);
+    const second = media.restart();
+    await env.advance(10);
+    await second;
+    expect(media.state).toBe('ready');
+    release();
+    await first;
+    await env.advance(10);
+    // The old start gave up quietly; the new sessions stand.
+    expect(media.state).toBe('ready');
+    expect(FakePC.all.filter((pc) => !pc.closed)).toHaveLength(2);
+  });
+
+  it('replaces the connection when a publish fails on the way, and publishes again', async () => {
+    const env = manualEnv();
+    const { api } = fakeApi();
+    api.publish.mockRejectedValueOnce(new RoomServerError(502, 'sfu_error'));
+    const media = new MediaClient(api, ME, env);
+    const failed: string[] = [];
+    media.onPublishFailed = (k) => failed.push(k);
+    await media.start();
+    await media.publish('audio', track('audio'));
+    await env.advance(50);
+    expect(failed).toEqual([]);
+    expect(api.session).toHaveBeenCalledTimes(4);
+    expect(api.publish).toHaveBeenCalledTimes(2);
+    expect(media.published('audio')).toBe(true);
+    // A second failure straight after waits its turn instead of looping.
+    api.receive.mockRejectedValueOnce(new RoomServerError(0, 'network'));
+    media.setPubs([pub('cy', 'audio')]);
+    await env.advance(50);
+    expect(media.state).toBe('failed');
+    await env.advance(Math.max(RECOVER_GAP_MS, START_RETRY_MS[0]) + 10);
+    expect(media.state).toBe('ready');
+  });
+
+  it('keeps what a screen wants of a video when its publisher publishes again', async () => {
+    const env = manualEnv();
+    const { api } = fakeApi();
+    const media = new MediaClient(api, ME, env);
+    await media.start();
+    media.setPubs([pub('dan', 'video', 's1'), pub('eve', 'video', 's1')]);
+    await env.advance(50);
+    media.want('dan:video', 'f');
+    media.want('eve:video', null);
+    await env.advance(PAUSE_AFTER_MS + 10);
+    const before = api.receive.mock.calls.length;
+    // Both publish again on new sessions, under the same names.
+    media.setPubs([pub('dan', 'video', 's2'), pub('eve', 'video', 's2')]);
+    await env.advance(50);
+    const asked = api.receive.mock.calls.slice(before).flatMap((c) => (c[0] as ReceiveRequest).tracks);
+    expect(asked).toEqual([{ publisherSessionId: 's2', trackName: 'dan:video', rid: 'f' }]);
+  });
+
+  it('matches receive results by publication, not just by name', async () => {
+    const env = manualEnv();
+    const { api, receives } = fakeApi();
+    receives.push((req) => ({ requiresImmediateRenegotiation: false, tracks: req.tracks.map((t) => ({ ...t, publisherSessionId: 'someone-else', mid: '77' })) }));
+    const media = new MediaClient(api, ME, env);
+    await media.start();
+    media.setPubs([pub('fay', 'audio')]);
+    await env.advance(50);
+    expect(media.track('fay:audio')).toBeNull();
   });
 });

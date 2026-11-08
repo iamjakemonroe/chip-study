@@ -1,7 +1,7 @@
 import { ChevronDown, ChevronUp, Hand, MicOff, Monitor, Pin, PinOff, RotateCcw, X } from 'lucide-react';
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import type { Person, Rid } from '../../shared/rooms.ts';
-import { canPickSpeaker, sendAudioTo } from './devices.ts';
+import { canPickSpeaker, sendAudioTo, unlockAudio } from './devices.ts';
 import { unwant, want } from './layers.ts';
 import { colorFor, initials, ordered, roleName } from './people.ts';
 import { roomSession } from './session.ts';
@@ -268,7 +268,10 @@ function Sound({ trackName }: { trackName: string }) {
     const a = ref.current;
     if (!a || !track) return;
     a.srcObject = new MediaStream([track]);
-    void a.play().catch(() => undefined);
+    void a.play().catch((e: unknown) => {
+      // Not allowed without a tap: the room asks for one ("Tap to hear the room").
+      if ((e as { name?: string } | null)?.name === 'NotAllowedError') useRoom.setState({ audioBlocked: true });
+    });
     return () => {
       a.srcObject = null;
     };
@@ -276,5 +279,14 @@ function Sound({ trackName }: { trackName: string }) {
   useEffect(() => {
     if (ref.current && canPickSpeaker()) void sendAudioTo(ref.current, speaker ?? roomSession()?.devices.speaker ?? null);
   }, [speaker, track]);
-  return <audio ref={ref} autoPlay />;
+  return <audio ref={ref} autoPlay data-room-audio="" />;
+}
+
+/** Plays the room's sound after a tap, when the browser wouldn't before. */
+export function hearTheRoom(): void {
+  unlockAudio();
+  const all = Array.from(document.querySelectorAll<HTMLAudioElement>('audio[data-room-audio]'));
+  void Promise.all(all.map((a) => a.play()))
+    .then(() => useRoom.setState({ audioBlocked: false }))
+    .catch(() => undefined);
 }

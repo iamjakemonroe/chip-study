@@ -7,6 +7,7 @@ import { SfuClient, SfuError, turnCredentials, withoutPort53 } from '../../worke
 import type { PubRow, SubRow } from '../../worker/store';
 import { parseAccess, parseRoster } from '../../worker/supabase';
 import { newNonce, readTicket, signTicket } from '../../worker/tickets';
+import { ROOM } from '../../shared/rooms';
 
 const ADA = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const BO = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
@@ -278,7 +279,7 @@ describe('Cloudflare Realtime requests', () => {
     await expect(down.newSession()).rejects.toMatchObject({ status: 0, refused: false });
   });
 
-  it('asks TURN for an hour of credentials and drops port 53', async () => {
+  it('asks TURN for a day of credentials and drops port 53', async () => {
     const { calls, f } = recorder(
       {
         iceServers: [
@@ -292,8 +293,8 @@ describe('Cloudflare Realtime requests', () => {
       },
       201,
     );
-    const servers = await turnCredentials('https://rtc.example/v1', 'key-1', 'key-token', 3600, f);
-    expect(calls[0]).toEqual({ url: 'https://rtc.example/v1/turn/keys/key-1/credentials/generate-ice-servers', method: 'POST', auth: 'Bearer key-token', body: { ttl: 3600 } });
+    const servers = await turnCredentials('https://rtc.example/v1', 'key-1', 'key-token', ROOM.turnTtlSeconds, f);
+    expect(calls[0]).toEqual({ url: 'https://rtc.example/v1/turn/keys/key-1/credentials/generate-ice-servers', method: 'POST', auth: 'Bearer key-token', body: { ttl: 86_400 } });
     expect(servers).toEqual([
       { urls: ['stun:stun.cloudflare.com:3478'] },
       { urls: ['turn:turn.cloudflare.com:3478?transport=udp', 'turns:turn.cloudflare.com:443?transport=tcp'], username: 'u', credential: 'c' },

@@ -39,7 +39,7 @@ export const ROOM = {
   endingWarnMs: 5 * 60_000,
   /** If the person asked to seed hasn't seeded by then, the next editor is asked. */
   seedWaitMs: 60_000,
-  turnTtlSeconds: 3_600,
+  turnTtlSeconds: 86_400,
   /** Largest binary (Yjs) frame a socket may send. The room's whole first filling (seeding) is
    * one frame, so it must fit. (Cloudflare takes up to 32 MiB.) */
   maxBinaryBytes: 16 << 20,

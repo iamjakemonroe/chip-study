@@ -31,12 +31,16 @@ export interface RoomCode {
   setStdin(stdin: string): void;
 }
 
+/** Notes' bodies and tasks' titles are shared texts: an edit is the change someone made (from the
+ * text they saw to their new text), merged with anyone else's, never the whole text written back. */
 export interface RoomLists {
   addNote(body: string): void;
-  updateNote(id: string, patch: { body?: string; pinned?: boolean }): void;
+  editNoteBody(id: string, from: string, to: string): void;
+  updateNote(id: string, patch: { pinned?: boolean }): void;
   removeNote(id: string): void;
   addTasks(tasks: { title: string; due: string | null }[]): void;
-  updateTask(id: string, patch: { title?: string; due_on?: string | null; done?: boolean }): void;
+  editTaskTitle(id: string, from: string, to: string): void;
+  updateTask(id: string, patch: { due_on?: string | null; done?: boolean }): void;
   removeTask(id: string): void;
 }
 
