@@ -107,7 +107,7 @@ export const terms: LegalDoc = {
           'Personal rooms are for people 18 and over. Anyone with the link can join, or the host lets each person in. A free host’s room takes up to 4 people for 60 minutes; a Pro host’s takes up to 10, with no time limit.',
           'Class rooms are opened by a teacher or admin of a school, college or university, for the classes and students they invite, up to 50. The institution’s admins, and the teachers of an invited class, join as co-hosts.',
           'The host and co-hosts choose who can edit, can let people in, and can remove anyone. Someone removed can’t rejoin with that link.',
-          'What’s written in a room is saved to the host’s assignment and stays there after the room ends. The room’s chat and Chip messages are kept with that assignment, for its host.',
+          'What’s written in a room is saved to the host’s assignment and stays there after the room ends, and so is the room’s conversation with Chip, for its host. The room’s chat is kept only while the room is open and deleted when it ends.',
           'Each question you ask the room’s Chip uses your own Chip time, and goes in the host’s AI-use record with your name.',
           'Be kind, and don’t record, copy or share other people’s video, voice or screen without their agreement. The rules in “Using it well” apply in rooms too.',
         ],
@@ -223,7 +223,7 @@ export const privacy: LegalDoc = {
         'Nothing in a study room is recorded: we don’t keep its audio, video or screen sharing. They pass through Cloudflare’s network (Cloudflare Realtime) to reach the others in the room, and aren’t stored.',
         [
           'Others in a room see your name (your display name or username, never your email), and your camera, microphone and screen when you turn them on, and whether you can edit.',
-          'What’s written in a room’s shared work is saved to the host’s assignment. The room’s chat and Chip messages are kept with that assignment, for its host.',
+          'What’s written in a room’s shared work, and the room’s conversation with Chip, are saved to the host’s assignment. The room’s chat (its last 200 messages) is kept only while the room is open, and deleted when the room ends.',
           'Questions you ask the room’s Chip go in the host’s AI-use record with your name, so on a school assignment the teacher sees who used Chip.',
           'We keep who is in each room, their role, whether they can edit, and whether they were let in or removed, to run the room.',
           'Personal rooms are for people 18 and over. Hosts and co-hosts can remove anyone.',
