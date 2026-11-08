@@ -224,7 +224,7 @@ export const privacy: LegalDoc = {
         [
           'Others in a room see your name (your display name or username, never your email), and your camera, microphone and screen when you turn them on, and whether you can edit.',
           'What’s written in a room’s shared work, and the room’s conversation with Chip, are saved to the host’s assignment. The room’s chat (its last 200 messages) is kept only while the room is open, and deleted when the room ends.',
-          'Questions you ask the room’s Chip go in the host’s AI-use record with your name, so the host sees who asked. If the host’s assignment is for a class, its teachers see what kind of help Chip gave and a summary, as for any assignment, but not who asked.',
+          'Questions you ask the room’s Chip go in the host’s AI-use record with your name, so the host sees who asked. If the host is a student whose school, college or university uses Chip Study, the staff who can see their work see what kind of help Chip gave and a summary, as for all their assignments, but not who asked.',
           'We keep who is in each room, their role, whether they can edit, and whether they were let in or removed, to run the room.',
           'Personal rooms are for people 18 and over. Hosts and co-hosts can remove anyone.',
         ],
