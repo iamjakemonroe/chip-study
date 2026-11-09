@@ -441,11 +441,22 @@ test('staff issue an invoice; the admin pays it and comes back to a confirmation
   await expect(page.getByRole('heading', { name: 'Checkout' })).toBeVisible();
   const ref = m.inst.invoices[0].ref;
   await page.goto(`/app/institution/${inst.id}?invoice=1&status=successful&tx_ref=${ref}&transaction_id=9876`);
-  await expect(page.getByText(/^Paid, thank you\. Your seats run until/)).toBeVisible();
+  // The result: what was paid, in the invoice's currency, and until when.
+  const paid = page.getByRole('dialog', { name: 'Invoice paid' });
+  await expect(paid).toBeVisible();
+  await expect(paid.getByText('Lagos Bay University: Chip Study seats')).toBeVisible();
+  await expect(paid.getByText('₦1,500,000', { exact: true })).toBeVisible();
+  await expect(paid.getByText('Seats until')).toBeVisible();
   await expect(page).toHaveURL(/\?tab=settings$/);
   expect(m.inst.invoices[0].status).toBe('paid');
   expect(inst).toMatchObject({ plan: 'paid', seats: 200 });
+  await paid.getByRole('button', { name: 'Done' }).click();
+  await expect(paid).toHaveCount(0);
   await expect(invoices.getByText(/^Paid/)).toBeVisible();
+  // A reload doesn't confirm it again.
+  await page.reload();
+  await expect(invoices.getByText(/^Paid/)).toBeVisible();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
 
   const v2 = m.inst.invoices.length;
   m.inst.invoices.push({ ...m.inst.invoices[0], id: 'inv-2', ref: 'kaivon-inv-000000000000000000000002', status: 'open', label: 'Extra seats', paid_at: null });
@@ -455,6 +466,25 @@ test('staff issue an invoice; the admin pays it and comes back to a confirmation
   await page.getByRole('button', { name: 'Cancel invoice' }).click();
   await page.getByRole('dialog', { name: 'Cancel this invoice?' }).getByRole('button', { name: 'Cancel invoice' }).click();
   await expect.poll(() => m.inst.invoices[v2].status).toBe('void');
+});
+
+test('an invoice issued in euros before still shows, pays and is confirmed as issued', async ({ page }) => {
+  const m = new MockBackend({ payOn: true });
+  const { inst } = m.inst.seedSchool();
+  const ref = 'kaivon-inv-000000000000000000000009';
+  m.inst.invoices.push({ id: 'inv-eur', institution_id: inst.id, ref, label: 'Seats, in euros', seats: 100, months: 12, currency: 'EUR', amount: 4200, status: 'open', created_at: new Date().toISOString(), paid_at: null });
+  await page.route('https://checkout.flutterwave.test/**', (route) => route.fulfill({ contentType: 'text/html', body: '<h1>Checkout</h1>' }));
+  await m.install(page);
+  await page.goto(`/app/institution/${inst.id}?tab=settings`);
+  const invoices = page.getByRole('region', { name: 'Invoices' });
+  await expect(invoices.getByText(/100 seats for 12 months · €4,200\.00/)).toBeVisible();
+  await invoices.getByRole('button', { name: 'Pay €4,200.00' }).click();
+  await expect(page.getByRole('heading', { name: 'Checkout' })).toBeVisible();
+  await page.goto(`/app/institution/${inst.id}?invoice=1&status=successful&tx_ref=${ref}&transaction_id=9877`);
+  const paid = page.getByRole('dialog', { name: 'Invoice paid' });
+  await expect(paid.getByText('Seats, in euros')).toBeVisible();
+  await expect(paid.getByText('€4,200.00', { exact: true })).toBeVisible();
+  expect(m.inst.invoices.find((v) => v.ref === ref)?.status).toBe('paid');
 });
 
 // ── The price for institutions ────────────────────────────────────────

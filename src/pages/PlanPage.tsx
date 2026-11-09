@@ -1,18 +1,20 @@
 import { Building2, Check, GraduationCap, Sparkles, Zap } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
-import { Link, useSearchParams } from 'react-router';
+import { useEffect, useState } from 'react';
+import { Link } from 'react-router';
 import { ChipLoader } from '../components/ChipLoader.tsx';
 import { Orb } from '../components/Orb.tsx';
+import { PaymentResult, usePaymentReturn } from '../components/PaymentResult.tsx';
 import { TopBar } from '../components/TopBar.tsx';
 import { Confirm, Ring, Spinner } from '../components/ui.tsx';
 import { chipTime, describe } from '../lib/allowance.ts';
-import { cancelPro, confirmPayment, knownPayStatus, PAY_WAIT, payStatus, subscribePro, type PayStatus } from '../lib/api.ts';
+import { cancelPro, knownPayStatus, PAY_WAIT, payStatus, subscribePro, type PayStatus } from '../lib/api.ts';
 import { FREE_FEATURES, INSTITUTION_FEATURES, PRO_FEATURES, SCHOOL_EMAILS, STUDENT_FEATURES } from '../content/plans.ts';
 import { PLAN_PRICES } from '../content/site.ts';
 import { useAuth } from '../store/auth.ts';
 import { useInstitutions } from '../store/institutions.ts';
 import { toast } from '../store/toast.ts';
 import { chargeCurrency, formatMoney, priceNote, useCurrency } from '../lib/currency.ts';
+import { rememberPayment, type PaymentIntent } from '../lib/payment.ts';
 import { proThrough, VIA_INSTITUTION_NOTE } from '../lib/institutions.ts';
 import type { Me } from '../lib/types.ts';
 
@@ -20,16 +22,15 @@ import type { Me } from '../lib/types.ts';
  * open). A school email sees Pro at the student price (and can still pick full Pro); anyone else
  * hears that students get it. Pro from an institution says whose it is, with nothing to buy or
  * cancel. Chip's loader stands in until all of it is known, then it shows at once. Coming back
- * from Flutterwave's checkout lands here to confirm the payment. */
+ * from Flutterwave's checkout lands here, and the payment's result opens over it. */
 export function PlanPage() {
   const me = useAuth((s) => s.me);
   const refresh = useAuth((s) => s.refresh);
-  const [params, setParams] = useSearchParams();
   // Null until the plans can show: straight away when it's all known already.
   const [pay, setPay] = useState<PayStatus | null>(() => (me ? knownPayStatus() : null));
   const [busy, setBusy] = useState<'pro' | 'student' | null>(null);
   const [cancelling, setCancelling] = useState(false);
-  const confirmed = useRef(false);
+  const payment = usePaymentReturn({ onPaid: refresh });
   const mine = useInstitutions((s) => s.mine);
   const through = proThrough(me, mine);
 
@@ -46,26 +47,6 @@ export function PlanPage() {
       m?.tier === 'pro' && (m.via_institution ?? !m.pro_until) ? Promise.race([useInstitutions.getState().load(), new Promise((done) => setTimeout(done, PAY_WAIT))]) : null;
     void Promise.all([payStatus(), Promise.resolve(here).then(whose)]).then(([status]) => setPay(status));
   }, [refresh]);
-
-  // Back from checkout: ?status=successful&tx_ref=…&transaction_id=…
-  useEffect(() => {
-    const ref = params.get('tx_ref');
-    const id = params.get('transaction_id');
-    const status = params.get('status');
-    if (!ref || confirmed.current) return;
-    confirmed.current = true;
-    setParams({}, { replace: true });
-    if (status !== 'successful' && status !== 'completed') {
-      toast('The payment didn’t go through. Nothing was charged.', 'warn');
-      return;
-    }
-    void confirmPayment(ref, id ?? '').then(async (r) => {
-      if (r.status === 'paid') {
-        await refresh();
-        toast('Welcome to Pro. Chip’s best model is yours.', 'good');
-      } else toast('We’re still confirming your payment. It can take a minute.', 'info');
-    });
-  }, [params, setParams, refresh]);
 
   const open = !!pay?.on && !pay.test;
   const fast = me ? chipTime(me, 'fast') : null;
@@ -84,8 +65,11 @@ export function PlanPage() {
   async function go(plan: 'pro' | 'student') {
     setBusy(plan);
     try {
-      // Charged in the currency the price is shown in.
-      location.href = await subscribePro(plan, currency);
+      // Charged in the currency the price is shown in, and remembered for the result.
+      const amount = plan === 'student' ? studentPrice : price;
+      const { link, ref } = await subscribePro(plan, currency);
+      if (ref) rememberPayment({ ref, kind: 'pro', plan, title: 'Chip Study Pro', amount, currency });
+      location.href = link;
     } catch (e) {
       toast((e as Error).message, 'warn');
       setBusy(null);
@@ -205,6 +189,7 @@ export function PlanPage() {
           </>
         )}
       </main>
+      <PaymentResult payment={payment} kind="pro" retrying={!!busy} onRetry={(intent: PaymentIntent | null) => void go(intent?.plan ?? (asStudent ? 'student' : 'pro'))} />
       <Confirm
         open={cancelling}
         title="Cancel Pro?"

@@ -58,6 +58,8 @@ export interface MockOptions {
   country?: string;
   /** The currencies the server has Pro's prices in (web_plan_prices): all three unless said. */
   serverCurrencies?: ('USD' | 'GBP' | 'NGN')[];
+  /** web-pay's answers to "confirm" for Pro, one per ask (the last repeats): paid unless said. */
+  confirm?: Record<string, unknown>[];
 }
 
 /** Pro's prices on the server (web_plan_prices), by currency. */
@@ -118,6 +120,9 @@ export class MockBackend {
         : route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ country: this.opts.country }) }),
     );
   }
+
+  /** How many times web-pay was asked to confirm Pro. */
+  confirms = 0;
 
   private currencies() {
     return this.opts.serverCurrencies ?? (['USD', 'GBP', 'NGN'] as const);
@@ -371,8 +376,14 @@ export class MockBackend {
       return this.json(route, this.inst.invoicePaid(String(body.ref)) ?? { status: 'unknown' });
     }
     if (body?.action === 'confirm') {
-      this.opts.tier = 'pro';
-      return this.json(route, { status: 'paid', product: 'study_pro', until: new Date(Date.now() + 30 * 86_400_000).toISOString() });
+      const script = this.opts.confirm;
+      const answer = script?.length ? script[Math.min(this.confirms++, script.length - 1)] : { status: 'paid' };
+      if (answer.status === 'paid') {
+        this.opts.tier = 'pro';
+        return this.json(route, { status: 'paid', product: 'study_pro', until: new Date(Date.now() + 30 * 86_400_000).toISOString(), ...answer });
+      }
+      if (answer.status === 'unreachable') return this.json(route, { error: 'Couldn\'t reach the payment service' }, 502);
+      return this.json(route, answer);
     }
     if (body?.action === 'cancel') return this.json(route, { status: 'cancelled', until: new Date(Date.now() + 20 * 86_400_000).toISOString() });
     return this.json(route, { error: 'Unknown action' }, 400);

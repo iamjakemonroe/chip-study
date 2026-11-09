@@ -1,11 +1,13 @@
 import { ArrowLeft, Building2 } from 'lucide-react';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router';
 import { ChipLoader } from '../components/ChipLoader.tsx';
 import { Orb } from '../components/Orb.tsx';
+import { PaymentResult, usePaymentReturn } from '../components/PaymentResult.tsx';
 import { TopBar } from '../components/TopBar.tsx';
-import { ApiError, confirmPayment, institutionOverview, listClasses, notAllowed } from '../lib/api.ts';
-import { countryName, dayText, institutionStatus, KIND_LABEL, ROLE_LABEL, TONE_CLASS } from '../lib/institutions.ts';
+import { ApiError, institutionOverview, listClasses, notAllowed, payInvoice } from '../lib/api.ts';
+import { countryName, institutionStatus, KIND_LABEL, ROLE_LABEL, TONE_CLASS } from '../lib/institutions.ts';
+import { rememberPayment, type PaymentIntent } from '../lib/payment.ts';
 import { toast } from '../store/toast.ts';
 import type { InstitutionOverview, StudyClass } from '../lib/types.ts';
 import { ClassesTab } from './ClassesTab.tsx';
@@ -73,26 +75,26 @@ export function InstitutionPage() {
     if (ov) document.title = `${ov.institution.name} · Chip Study`;
   }, [ov]);
 
-  // Back from paying an invoice: ?invoice=1&status=…&tx_ref=…&transaction_id=… (Flutterwave's).
-  const confirmed = useRef(false);
-  useEffect(() => {
-    const ref = params.get('tx_ref');
-    if (params.get('invoice') !== '1' || !ref || confirmed.current) return;
-    confirmed.current = true;
-    const status = params.get('status');
-    const tx = params.get('transaction_id') ?? '';
-    setParams({ tab: 'settings' }, { replace: true });
-    if (status !== 'successful' && status !== 'completed') {
-      toast('The payment didn’t go through. Nothing was charged.', 'warn');
+  // Back from paying an invoice (?invoice=1&status=…&tx_ref=…&transaction_id=…, Flutterwave's):
+  // the result opens over the invoices.
+  const payment = usePaymentReturn({ onPaid: reload, after: 'tab=settings' });
+  const [retrying, setRetrying] = useState(false);
+  const retry = async (intent: PaymentIntent | null) => {
+    if (!intent?.invoiceId) {
+      payment.close();
       return;
     }
-    void confirmPayment(ref, tx).then(async (r) => {
-      if (r.status === 'paid') {
-        await reload();
-        toast(r.until ? `Paid, thank you. Your seats run until ${dayText(r.until)}.` : 'Paid, thank you.', 'good');
-      } else toast('We’re still confirming your payment. It can take a minute.', 'info');
-    });
-  }, [params, setParams, reload]);
+    setRetrying(true);
+    try {
+      const { link, ref } = await payInvoice(intent.invoiceId);
+      if (ref) rememberPayment({ ...intent, ref });
+      location.href = link;
+    } catch (e) {
+      toast((e as Error).message, 'warn');
+      setRetrying(false);
+    }
+  };
+  const result = <PaymentResult payment={payment} kind="institution" onRetry={(intent) => void retry(intent)} retrying={retrying} />;
 
   const go = useCallback(
     (next: Tab, classId?: string) => {
@@ -114,6 +116,7 @@ export function InstitutionPage() {
             Back to my desk
           </Link>
         </main>
+        {result}
       </div>
     );
   }
@@ -134,6 +137,7 @@ export function InstitutionPage() {
             <ChipLoader page={false} label="Opening your institution" />
           </div>
         )}
+        {result}
       </div>
     );
   }
@@ -189,6 +193,7 @@ export function InstitutionPage() {
         </div>
         <p className="mt-10 text-center text-xs text-ink-4">{ROLE_LABEL[ov.role]}s see activity and AI-use records, never students’ chats, notes or documents.</p>
       </main>
+      {result}
     </div>
   );
 }

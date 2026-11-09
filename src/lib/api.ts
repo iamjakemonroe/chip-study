@@ -2,6 +2,7 @@ import { supabase } from './supabase.ts';
 import type { Currency } from './currency.ts';
 import { institutionError } from './institutions.ts';
 import type { InstitutionPrices } from './institutionPrice.ts';
+import type { ConfirmAnswer } from './payment.ts';
 import type {
   Assignment,
   Card,
@@ -374,12 +375,14 @@ async function askPayStatus(): Promise<PayStatus | null> {
 }
 
 /** Starts paying for Pro, or for the student plan (Pro at the student price, for a school email),
- * in [currency], the one its price was shown in, and answers the checkout link. */
-export async function subscribePro(plan: 'pro' | 'student', currency: Currency): Promise<string> {
+ * in [currency], the one its price was shown in, and answers the checkout link and the payment's
+ * reference. */
+export async function subscribePro(plan: 'pro' | 'student', currency: Currency): Promise<{ link: string; ref: string }> {
   const { data, error } = await supabase.functions.invoke('web-pay', {
     body: { action: 'subscribe', plan: plan === 'student' ? 'study.pro.student.monthly' : 'study.pro.monthly', currency, app: 'study' },
   });
   const link = (data as { link?: string } | null)?.link;
+  const ref = String((data as { ref?: string } | null)?.ref ?? '');
   if (error || !link || !link.startsWith('https://')) {
     let why = '';
     try {
@@ -399,13 +402,28 @@ export async function subscribePro(plan: 'pro' | 'student', currency: Currency):
               : 'Couldn’t start the payment. Try again.',
     );
   }
-  return link;
+  return { link, ref };
 }
 
-export async function confirmPayment(ref: string, transactionId: string): Promise<{ status: string; until: string | null }> {
-  const { data, error } = await supabase.functions.invoke('web-pay', { body: { action: 'confirm', ref, transaction_id: transactionId } });
-  if (error || !data) return { status: 'error', until: null };
-  return { status: String(data.status), until: typeof data.until === 'string' ? data.until : null };
+/** Back from checkout: web-pay asks Flutterwave about the payment (and pays it out, once). A call
+ * that didn't get through is "unreachable"; one refused for want of a sign-in is "signin". */
+export async function confirmPayment(ref: string, transactionId: string): Promise<ConfirmAnswer> {
+  try {
+    const { data, error } = await supabase.functions.invoke('web-pay', { body: { action: 'confirm', ref, transaction_id: transactionId } });
+    if (error || !data) {
+      const status = (error as { context?: Response } | null)?.context?.status;
+      return { status: status === 401 ? 'signin' : 'unreachable', until: null };
+    }
+    const d = data as { status?: unknown; until?: unknown; amount?: unknown; currency?: unknown };
+    return {
+      status: String(d.status ?? 'unknown'),
+      until: typeof d.until === 'string' ? d.until : null,
+      amount: typeof d.amount === 'number' || typeof d.amount === 'string' ? Number(d.amount) : null,
+      currency: typeof d.currency === 'string' ? d.currency : null,
+    };
+  } catch {
+    return { status: 'unreachable', until: null };
+  }
 }
 
 export async function cancelPro(): Promise<{ status: string; until: string | null }> {
@@ -694,10 +712,12 @@ export async function staffInvoiceVoid(invoiceId: string): Promise<void> {
   inst(await supabase.rpc('study_staff_invoice_void', { p_invoice: invoiceId }), 'Couldn’t cancel that invoice just now.');
 }
 
-/** Starts paying an invoice (an admin of its institution): answers the checkout link. */
-export async function payInvoice(invoiceId: string): Promise<string> {
+/** Starts paying an invoice (an admin of its institution), in the currency it was issued in:
+ * answers the checkout link and the payment's reference. */
+export async function payInvoice(invoiceId: string): Promise<{ link: string; ref: string }> {
   const { data, error } = await supabase.functions.invoke('web-pay', { body: { action: 'invoice', invoice_id: invoiceId } });
   const link = (data as { link?: string } | null)?.link;
+  const ref = String((data as { ref?: string } | null)?.ref ?? '');
   if (error || !link || !link.startsWith('https://')) {
     let why = '';
     try {
@@ -710,7 +730,7 @@ export async function payInvoice(invoiceId: string): Promise<string> {
       why,
     );
   }
-  return link;
+  return { link, ref };
 }
 
 // ── Learning platforms (LTI 1.3) ──────────────────────────────────────

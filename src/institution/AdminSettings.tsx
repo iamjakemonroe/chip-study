@@ -5,6 +5,7 @@ import { BLACKBOARD_APP_ID, checkPlatform, ltiAddresses, PLATFORM_HELP, PLATFORM
 import { site } from '../content/site.ts';
 import { institutionInvoices, ltiPlatformRemove, ltiPlatforms, ltiPlatformSet, payInvoice, setInstitutionMinors } from '../lib/api.ts';
 import { formatMoney } from '../lib/currency.ts';
+import { rememberPayment } from '../lib/payment.ts';
 import { dayText } from '../lib/institutions.ts';
 import { SUPABASE_URL } from '../lib/supabase.ts';
 import type { InstitutionDetails, Invoice, LtiPlatform } from '../lib/types.ts';
@@ -290,7 +291,10 @@ export function InvoicesSetting({ inst, reloadKey }: { inst: InstitutionDetails;
                   onClick={async () => {
                     setPaying(v.id);
                     try {
-                      location.href = await payInvoice(v.id);
+                      const { link, ref } = await payInvoice(v.id);
+                      // Remembered, so the result can say what was paid, in the invoice's currency.
+                      if (ref) rememberPayment({ ref, kind: 'institution', title: v.label, amount: v.amount, currency: v.currency, invoiceId: v.id });
+                      location.href = link;
                     } catch (e) {
                       toast((e as Error).message, 'warn');
                       setPaying(null);

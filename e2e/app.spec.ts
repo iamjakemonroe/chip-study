@@ -382,6 +382,109 @@ test.describe('paying in US dollars, in the US', () => {
   });
 });
 
+// ── Back from Flutterwave: the payment's result ───────────────────────
+
+test.describe('back from paying for Pro', () => {
+  test.use({ timezoneId: 'Europe/London' });
+
+  const result = (page: Page) => page.getByRole('dialog');
+
+  /** Pays from the plan page (so the device knows what was bought), and comes back. */
+  async function payAndReturn(page: Page, m: MockBackend, back: string) {
+    await page.route('https://checkout.flutterwave.test/**', (route) => route.fulfill({ contentType: 'text/html', body: '<h1>Checkout</h1>' }));
+    await page.goto('/app/plan');
+    await page.getByRole('button', { name: 'Go Pro for £6.49 a month' }).click();
+    await expect(page.getByRole('heading', { name: 'Checkout' })).toBeVisible();
+    const sent = m.made('/functions/v1/web-pay', 'POST').map((r) => r.body as { action: string; currency?: string }).filter((b) => b.action === 'subscribe');
+    expect(sent.at(-1)).toMatchObject({ plan: 'study.pro.monthly', currency: 'GBP' });
+    await page.goto(`/app/plan?${back}`);
+  }
+
+  test('paid: what was bought and what it cost, in pounds; the address is tidied, so a reload doesn’t repeat it', async ({ page }) => {
+    const m = new MockBackend({ payOn: true });
+    await m.install(page);
+    await payAndReturn(page, m, 'status=successful&tx_ref=kaivon-sub-1&transaction_id=9876');
+    const dialog = result(page);
+    await expect(dialog.getByRole('heading', { name: 'You’re on Pro' })).toBeVisible();
+    await expect(page.getByRole('dialog', { name: 'You’re on Pro' })).toHaveAttribute('aria-modal', 'true');
+    await expect(dialog.getByText('Chip Study Pro', { exact: true })).toBeVisible();
+    await expect(dialog.getByText('£6.49', { exact: true })).toBeVisible();
+    await expect(dialog.getByText('Renews on')).toBeVisible();
+    await expect(page).toHaveURL(/\/app\/plan$/);
+    // Focus is in the dialog and stays there.
+    const start = dialog.getByRole('button', { name: 'Start studying' });
+    await expect(start).toBeFocused();
+    for (let i = 0; i < 4; i++) {
+      await page.keyboard.press('Tab');
+      expect(await dialog.evaluate((d) => d.contains(document.activeElement))).toBe(true);
+    }
+    await page.keyboard.press('Shift+Tab');
+    expect(await dialog.evaluate((d) => d.contains(document.activeElement))).toBe(true);
+    await nothingClipped(page);
+    // The plan behind it is Pro now.
+    await page.keyboard.press('Escape');
+    await expect(result(page)).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Cancel Pro' })).toBeVisible();
+    const confirms = m.confirms;
+    await page.reload();
+    await expect(page.getByRole('button', { name: 'Cancel Pro' })).toBeVisible();
+    await expect(result(page)).toHaveCount(0);
+    expect(m.confirms).toBe(confirms);
+  });
+
+  test('still going through: confirming, then paid as soon as it is', async ({ page }) => {
+    const m = new MockBackend({ payOn: true, confirm: [{ status: 'pending' }, { status: 'unreachable' }, { status: 'paid' }] });
+    await m.install(page);
+    await payAndReturn(page, m, 'status=successful&tx_ref=kaivon-sub-1&transaction_id=9876');
+    await expect(result(page).getByRole('heading', { name: 'Confirming your payment…' })).toBeVisible();
+    await expect(page).toHaveURL(/\/app\/plan$/);
+    await expect(result(page).getByRole('heading', { name: 'You’re on Pro' })).toBeVisible({ timeout: 15_000 });
+    await expect(result(page).getByText('£6.49', { exact: true })).toBeVisible();
+    expect(m.confirms).toBe(3);
+    await expect(result(page).getByRole('button', { name: 'Start studying' })).toBeFocused();
+    await result(page).getByRole('button', { name: 'Start studying' }).click();
+    await expect(result(page)).toHaveCount(0);
+  });
+
+  test('cancelled at checkout: nothing was charged, and Try again starts the same plan', async ({ page }) => {
+    const m = new MockBackend({ payOn: true });
+    await m.install(page);
+    await payAndReturn(page, m, 'status=cancelled&tx_ref=kaivon-sub-1');
+    const dialog = page.getByRole('dialog', { name: 'Payment not completed' });
+    await expect(dialog).toBeVisible();
+    await expect(dialog.getByText('The payment didn’t go through. Nothing was charged.')).toBeVisible();
+    expect(m.confirms).toBe(0);
+    await expect(dialog.getByRole('button', { name: 'Try again' })).toBeFocused();
+    await dialog.getByRole('button', { name: 'Try again' }).click();
+    await expect(page.getByRole('heading', { name: 'Checkout' })).toBeVisible();
+    const sent = m.made('/functions/v1/web-pay', 'POST').map((r) => r.body as { action: string; plan?: string; currency?: string }).filter((b) => b.action === 'subscribe');
+    expect(sent).toHaveLength(2);
+    expect(sent.at(-1)).toMatchObject({ plan: 'study.pro.monthly', currency: 'GBP' });
+  });
+
+  test('declined by the bank: it didn’t go through; Close leaves the plan as it was', async ({ page }) => {
+    const m = new MockBackend({ payOn: true, confirm: [{ status: 'failed' }] });
+    await m.install(page);
+    await payAndReturn(page, m, 'status=failed&tx_ref=kaivon-sub-1&transaction_id=9876');
+    const dialog = page.getByRole('dialog', { name: 'Payment not completed' });
+    await expect(dialog.getByText('Nothing was charged.', { exact: false })).toBeVisible();
+    await dialog.getByRole('button', { name: 'Close' }).first().click();
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Go Pro for £6.49 a month' })).toBeVisible();
+  });
+
+  test('a payment Flutterwave doesn’t know: says so honestly, with the reference', async ({ page }) => {
+    const m = new MockBackend({ payOn: true, confirm: [{ status: 'unknown' }] });
+    await m.install(page);
+    await page.goto('/app/plan?status=successful&tx_ref=kaivon-sub-77&transaction_id=9876');
+    const dialog = page.getByRole('dialog', { name: 'We couldn’t confirm this payment' });
+    await expect(dialog).toBeVisible();
+    await expect(dialog.getByText(/write to support@kaivon\.app with the reference below/)).toBeVisible();
+    await expect(dialog.getByText('kaivon-sub-77')).toBeVisible();
+    await expect(page).toHaveURL(/\/app\/plan$/);
+  });
+});
+
 test('writing saves as you go, and is there after a reload', async ({ page }) => {
   const m = new MockBackend();
   m.seedAssignment();
