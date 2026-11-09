@@ -65,9 +65,8 @@ export interface MockInvoice {
   label: string;
   seats: number;
   months: number;
-  /** The database takes these four (study_institution_invoices_currency_check); new ones are
-   * GBP, USD or NGN, EUR only as issued before. */
-  currency: 'GBP' | 'USD' | 'NGN' | 'EUR';
+  /** The database takes these four (study_institution_invoices_currency_check). */
+  currency: 'GBP' | 'USD' | 'EUR' | 'NGN';
   amount: number;
   status: 'open' | 'paid' | 'void';
   created_at: string;

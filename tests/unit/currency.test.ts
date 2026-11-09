@@ -4,12 +4,18 @@ import { PLAN_PRICES, studentSaving } from '../../src/content/site.ts';
 import { chargeCurrency, COUNTRY_KEY, createCurrencyStore, currencyForCountry, currencyForTimeZone, formatMoney, GEO_TIMEOUT, priceNote, type Currency } from '../../src/lib/currency.ts';
 
 describe('the currency rule', () => {
-  it('goes by country: naira in Nigeria, pounds in the UK and the Crown Dependencies, dollars everywhere else', () => {
+  it('goes by country: naira in Nigeria, pounds in the UK and the Crown Dependencies, euros where the euro is the money, dollars everywhere else', () => {
     expect(currencyForCountry('NG')).toBe('NGN');
     for (const c of ['GB', 'IM', 'JE', 'GG']) expect(currencyForCountry(c), c).toBe('GBP');
-    for (const c of ['US', 'CA', 'FR', 'DE', 'IE', 'GH', 'KE', 'ZA', 'IN', 'AU', 'BR', 'JP']) expect(currencyForCountry(c), c).toBe('USD');
+    const euro = ['AT', 'BE', 'BG', 'HR', 'CY', 'EE', 'FI', 'FR', 'DE', 'GR', 'IE', 'IT', 'LV', 'LT', 'LU', 'MT', 'NL', 'PT', 'SK', 'SI', 'ES'];
+    const alsoEuro = ['AD', 'MC', 'SM', 'VA', 'ME', 'XK', 'AX', 'GF', 'GP', 'MQ', 'RE', 'YT', 'PM', 'BL', 'MF'];
+    for (const c of [...euro, ...alsoEuro]) expect(currencyForCountry(c), c).toBe('EUR');
+    // Europe outside the euro, and everywhere else.
+    for (const c of ['CH', 'LI', 'RS', 'NO', 'SE', 'DK', 'PL', 'CZ', 'HU', 'RO', 'IS', 'AL', 'BA', 'MK', 'TR', 'UA']) expect(currencyForCountry(c), c).toBe('USD');
+    for (const c of ['US', 'CA', 'GH', 'KE', 'ZA', 'IN', 'AU', 'BR', 'JP']) expect(currencyForCountry(c), c).toBe('USD');
     expect(currencyForCountry(' gb ')).toBe('GBP');
     expect(currencyForCountry('ng')).toBe('NGN');
+    expect(currencyForCountry('de')).toBe('EUR');
   });
 
   it('leaves it to the time zone when the country isn’t known', () => {
@@ -19,7 +25,21 @@ describe('the currency rule', () => {
   it('guesses from the time zone until then', () => {
     expect(currencyForTimeZone('Africa/Lagos')).toBe('NGN');
     for (const tz of ['Europe/London', 'Europe/Jersey', 'Europe/Guernsey', 'Europe/Isle_of_Man']) expect(currencyForTimeZone(tz), tz).toBe('GBP');
-    for (const tz of ['America/New_York', 'America/Los_Angeles', 'Europe/Paris', 'Europe/Dublin', 'Europe/Berlin', 'Africa/Accra', 'Asia/Tokyo', 'UTC']) {
+    for (const tz of [
+      'Europe/Vienna', 'Europe/Brussels', 'Europe/Zagreb', 'Europe/Nicosia', 'Europe/Tallinn', 'Europe/Helsinki', 'Europe/Mariehamn',
+      'Europe/Paris', 'Europe/Berlin', 'Europe/Busingen', 'Europe/Athens', 'Europe/Dublin', 'Europe/Rome', 'Europe/Riga', 'Europe/Vilnius',
+      'Europe/Luxembourg', 'Europe/Malta', 'Europe/Amsterdam', 'Europe/Lisbon', 'Europe/Bratislava', 'Europe/Ljubljana', 'Europe/Madrid',
+      'Europe/Sofia', 'Europe/Andorra', 'Europe/Monaco', 'Europe/San_Marino', 'Europe/Vatican', 'Europe/Podgorica',
+      'Asia/Nicosia', 'Asia/Famagusta', 'Atlantic/Madeira', 'Atlantic/Azores', 'Atlantic/Canary', 'Africa/Ceuta',
+      'America/Cayenne', 'America/Guadeloupe', 'America/Martinique', 'America/Miquelon', 'America/St_Barthelemy', 'America/Marigot',
+      'Indian/Reunion', 'Indian/Mayotte',
+    ]) {
+      expect(currencyForTimeZone(tz), tz).toBe('EUR');
+    }
+    for (const tz of [
+      'Europe/Zurich', 'Europe/Belgrade', 'Europe/Oslo', 'Europe/Stockholm', 'Europe/Copenhagen', 'Europe/Warsaw', 'Europe/Prague', 'Europe/Budapest',
+      'Europe/Bucharest', 'Europe/Istanbul', 'America/New_York', 'America/Los_Angeles', 'Africa/Accra', 'Asia/Tokyo', 'UTC',
+    ]) {
       expect(currencyForTimeZone(tz), tz).toBe('USD');
     }
     expect(currencyForTimeZone(undefined)).toBe('USD');
@@ -40,21 +60,26 @@ describe('the currency rule', () => {
     expect(formatMoney(0, 'GBP', { trim: true })).toBe('£0');
     expect(formatMoney(1234.5, 'USD')).toBe('$1,234.50');
     expect(formatMoney(42, 'EUR')).toBe('€42.00');
+    expect(formatMoney(7.49, 'EUR')).toBe('€7.49');
+    expect(formatMoney(42, 'EUR', { trim: true })).toBe('€42');
+    expect(formatMoney(1886.5, 'EUR', { trim: true })).toBe('€1,886.50');
     expect(formatMoney(1, 'cad')).toBe('CAD 1.00');
   });
 
   it('notes the one currency prices are in', () => {
     expect(priceNote('NGN')).toBe('Prices in naira.');
     expect(priceNote('GBP')).toBe('Prices in pounds.');
+    expect(priceNote('EUR')).toBe('Prices in euros.');
     expect(priceNote('USD')).toBe('Prices in US dollars. Your bank converts if your card is in another currency.');
   });
 });
 
 describe('the plans’ prices', () => {
-  it('are in every currency: pounds about 80% of the dollars, naira the dollars’ digits times 1,000', () => {
-    expect(PLAN_PRICES).toEqual({ USD: { pro: 7.99, student: 5.99 }, GBP: { pro: 6.49, student: 4.99 }, NGN: { pro: 7990, student: 5990 } });
+  it('are in every currency: pounds about 80% of the dollars, euros about 93%, naira the dollars’ digits times 1,000', () => {
+    expect(PLAN_PRICES).toEqual({ USD: { pro: 7.99, student: 5.99 }, GBP: { pro: 6.49, student: 4.99 }, EUR: { pro: 7.49, student: 5.49 }, NGN: { pro: 7990, student: 5990 } });
     expect(studentSaving(PLAN_PRICES.USD)).toBe(25);
     expect(studentSaving(PLAN_PRICES.GBP)).toBe(23);
+    expect(studentSaving(PLAN_PRICES.EUR)).toBe(27);
   });
 
   it('are shown and charged in US dollars where the server has no price in the visitor’s currency', () => {
@@ -65,6 +90,8 @@ describe('the plans’ prices', () => {
     expect(chargeCurrency('USD', pro, student)).toBe('USD');
     expect(chargeCurrency('GBP', { USD: 7.99, NGN: 7990 }, { USD: 5.99, NGN: 5990 })).toBe('USD');
     expect(chargeCurrency('GBP', { USD: 7.99, GBP: 6.49 }, { USD: 5.99 })).toBe('USD');
+    expect(chargeCurrency('EUR', { ...pro, EUR: 7.49 }, { ...student, EUR: 5.49 })).toBe('EUR');
+    expect(chargeCurrency('EUR', pro, student)).toBe('USD');
     // Before the server's prices are known: the visitor's, as the page shows.
     expect(chargeCurrency('GBP', null, undefined)).toBe('GBP');
     expect(chargeCurrency('GBP')).toBe('GBP');
@@ -79,6 +106,10 @@ describe('the plans’ prices', () => {
     expect(text('USD')).toContain('costs $45 per student per year');
     expect(text('NGN')).toContain('Chip Study Pro costs ₦7,990 a month.');
     expect(text('NGN')).toContain('costs ₦45,000 per student per year');
+    expect(text('EUR')).toContain('Chip Study Pro costs €7.49 a month. It renews');
+    expect(text('EUR')).toContain('Students get Pro for €5.49 a month');
+    expect(text('EUR')).toContain('costs €42 per student per year, billed yearly');
+    expect(text('EUR')).not.toMatch(/[$₦£]\d|US\$/);
     expect(text('GBP')).not.toMatch(/[$₦€]\d|US\$/);
     expect(text('USD')).not.toMatch(/[£₦€]\d|US\$/);
     expect(text('NGN')).not.toMatch(/[£$€]\d|US\$/);
@@ -156,5 +187,13 @@ describe('the visitor’s currency', () => {
     expect(await uk.store.refine()).toBe('GBP');
     const ng = setup({ timeZone: 'Europe/London', answer: { country: 'NG' } });
     expect(await ng.store.refine()).toBe('NGN');
+  });
+
+  it('turns a German visitor to euros, and a Swiss one in a euro time zone to dollars', async () => {
+    const de = setup({ timeZone: 'America/New_York', answer: { country: 'DE' } });
+    expect(await de.store.refine()).toBe('EUR');
+    const ch = setup({ timeZone: 'Europe/Berlin', answer: { country: 'CH' } });
+    expect(ch.store.get()).toBe('EUR');
+    expect(await ch.store.refine()).toBe('USD');
   });
 });

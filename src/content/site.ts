@@ -14,16 +14,18 @@ export const site = {
 /** Chip Study Pro a month, and the student plan (Pro for less, for a school email), in each
  * currency it's sold in: web_plan_prices on Utopia's project (study.pro.monthly and
  * study.pro.student.monthly), shown before anyone signs in. Change them together. Pounds are
- * about 80% of the dollar price; naira is the dollar price's digits times 1,000. */
+ * about 80% of the dollar price and euros about 93%; naira is the dollar price's digits times
+ * 1,000. */
 export const PLAN_PRICES: Record<Currency, { pro: number; student: number }> = {
   USD: { pro: 7.99, student: 5.99 },
   GBP: { pro: 6.49, student: 4.99 },
+  EUR: { pro: 7.49, student: 5.49 },
   NGN: { pro: 7990, student: 5990 },
 };
 
 /** The price for institutions, per student per year (study_institution_prices), for the Terms;
  * the pages ask the server for it. */
-export const INSTITUTION_PRICES: Record<Currency, number> = { USD: 45, GBP: 36, NGN: 45_000 };
+export const INSTITUTION_PRICES: Record<Currency, number> = { USD: 45, GBP: 36, EUR: 42, NGN: 45_000 };
 
 /** How much less the student plan is, in whole percent ("25"). */
 export const studentSaving = (p: { pro: number; student: number }) => Math.round((1 - p.student / p.pro) * 100);

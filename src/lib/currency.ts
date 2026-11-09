@@ -1,13 +1,31 @@
 import { useSyncExternalStore } from 'react';
 
 /** Which currency a visitor sees prices in and pays in, the same rule on every Kaivon site: naira
- * in Nigeria, pounds in the UK, the Isle of Man and the Channel Islands, US dollars everywhere
- * else. The country comes from Cloudflare (GET /api/geo, worker/geo.ts); until it's known, the
- * browser's time zone decides. Prices are in exactly one currency, and checkout charges it. */
-export type Currency = 'USD' | 'GBP' | 'NGN';
+ * in Nigeria, pounds in the UK, the Isle of Man and the Channel Islands, euros where the euro is
+ * the money, US dollars everywhere else (Switzerland, Serbia and Europe's other non-euro countries
+ * included). The country comes from Cloudflare (GET /api/geo, worker/geo.ts); until it's known,
+ * the browser's time zone decides. Prices are in exactly one currency, and checkout charges it. */
+export type Currency = 'USD' | 'GBP' | 'EUR' | 'NGN';
 
 const POUND_COUNTRIES = new Set(['GB', 'IM', 'JE', 'GG']);
 const POUND_ZONES = new Set(['Europe/London', 'Europe/Jersey', 'Europe/Guernsey', 'Europe/Isle_of_Man']);
+
+/** The euro area (Bulgaria from 2026), the small states and Kosovo and Montenegro that use the
+ * euro, and the French overseas parts that are in it. */
+const EURO_COUNTRIES = new Set([
+  'AT', 'BE', 'BG', 'HR', 'CY', 'EE', 'FI', 'FR', 'DE', 'GR', 'IE', 'IT', 'LV', 'LT', 'LU', 'MT', 'NL', 'PT', 'SK', 'SI', 'ES',
+  'AD', 'MC', 'SM', 'VA', 'ME', 'XK', 'AX', 'GF', 'GP', 'MQ', 'RE', 'YT', 'PM', 'BL', 'MF',
+]);
+/** Their time zones (Europe/Busingen is Germany's, inside Switzerland). */
+const EURO_ZONES = new Set([
+  'Europe/Vienna', 'Europe/Brussels', 'Europe/Zagreb', 'Europe/Nicosia', 'Europe/Tallinn', 'Europe/Helsinki', 'Europe/Mariehamn',
+  'Europe/Paris', 'Europe/Berlin', 'Europe/Busingen', 'Europe/Athens', 'Europe/Dublin', 'Europe/Rome', 'Europe/Riga', 'Europe/Vilnius',
+  'Europe/Luxembourg', 'Europe/Malta', 'Europe/Amsterdam', 'Europe/Lisbon', 'Europe/Bratislava', 'Europe/Ljubljana', 'Europe/Madrid',
+  'Europe/Sofia', 'Europe/Andorra', 'Europe/Monaco', 'Europe/San_Marino', 'Europe/Vatican', 'Europe/Podgorica',
+  'Asia/Nicosia', 'Asia/Famagusta', 'Atlantic/Madeira', 'Atlantic/Azores', 'Atlantic/Canary', 'Africa/Ceuta',
+  'America/Cayenne', 'America/Guadeloupe', 'America/Martinique', 'America/Miquelon', 'America/St_Barthelemy', 'America/Marigot',
+  'Indian/Reunion', 'Indian/Mayotte',
+]);
 
 /** A country's currency (ISO 3166 alpha-2), or null when the country isn't known (Cloudflare's
  * XX, Tor's T1, or anything that isn't a code), so the time zone decides. */
@@ -17,6 +35,7 @@ export function currencyForCountry(country: unknown): Currency | null {
   if (!/^[A-Z]{2}$/.test(code) || code === 'XX' || code === 'T1') return null;
   if (code === 'NG') return 'NGN';
   if (POUND_COUNTRIES.has(code)) return 'GBP';
+  if (EURO_COUNTRIES.has(code)) return 'EUR';
   return 'USD';
 }
 
@@ -24,14 +43,15 @@ export function currencyForCountry(country: unknown): Currency | null {
 export function currencyForTimeZone(timeZone: string | null | undefined): Currency {
   if (timeZone === 'Africa/Lagos') return 'NGN';
   if (timeZone && POUND_ZONES.has(timeZone)) return 'GBP';
+  if (timeZone && EURO_ZONES.has(timeZone)) return 'EUR';
   return 'USD';
 }
 
 const SYMBOL: Record<string, string> = { USD: '$', GBP: '£', NGN: '₦', EUR: '€' };
 
-/** "$7.99", "£6.49", "₦7,990" (whole naira). [trim] drops the pence or cents of a whole amount, for
- * the price for institutions ("£36"). EUR is only for invoices already issued in euros; any other
- * code is written before the amount ("CAD 1.00"). */
+/** "$7.99", "£6.49", "€7.49", "₦7,990" (whole naira). [trim] drops the pence or cents of a whole
+ * amount, for the price for institutions ("£36", "€42"). Any other code is written before the
+ * amount ("CAD 1.00"). */
 export function formatMoney(amount: number, currency: string, { trim = false }: { trim?: boolean } = {}): string {
   const code = currency.toUpperCase();
   const whole = code === 'NGN' || (trim && Math.round(amount * 100) % 100 === 0);
@@ -55,6 +75,7 @@ export function chargeCurrency(visitor: Currency, ...lists: (Partial<Record<stri
 export function priceNote(currency: Currency): string {
   if (currency === 'NGN') return 'Prices in naira.';
   if (currency === 'GBP') return 'Prices in pounds.';
+  if (currency === 'EUR') return 'Prices in euros.';
   return 'Prices in US dollars. Your bank converts if your card is in another currency.';
 }
 

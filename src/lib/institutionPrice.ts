@@ -2,16 +2,15 @@
  * from a minimum number of students, after a free one-term pilot. Pure, so it can be tested. */
 import { formatMoney, type Currency } from './currency.ts';
 
-/** A currency the price, or an invoice, can be in. Visitors see GBP, USD or NGN (the rule in
- * currency.ts); EUR stays only so invoices already issued in euros show and pay as issued. */
-export type PriceCurrency = Currency | 'EUR';
+/** A currency the price, or an invoice, can be in: the visitor's (the rule in currency.ts). */
+export type PriceCurrency = Currency;
 
 export type InstitutionPrices = Partial<Record<PriceCurrency, { per_student_year: number; min_students: number }>>;
 
 /** The currencies a new invoice can be in, in the order staff see them. */
-export const INVOICE_CURRENCIES: Currency[] = ['GBP', 'USD', 'NGN'];
+export const INVOICE_CURRENCIES: Currency[] = ['GBP', 'USD', 'EUR', 'NGN'];
 
-/** "£36", "$45", "₦45,000"; pence and cents only when there are some ("£1,912.50"). */
+/** "£36", "$45", "€42", "₦45,000"; pence and cents only when there are some ("£1,912.50"). */
 export function formatPrice(amount: number, currency: PriceCurrency): string {
   return formatMoney(amount, currency, { trim: true });
 }

@@ -408,9 +408,9 @@ test('staff issue an invoice; the admin pays it and comes back to a confirmation
   await page.getByRole('tab', { name: 'Approved', exact: true }).click();
   await page.getByRole('listitem').filter({ hasText: 'Lagos Bay University' }).getByRole('button', { name: 'Invoices' }).click();
   const dialog = page.getByRole('dialog', { name: 'Invoices for Lagos Bay University' });
-  // In the institution's own currency (Nigeria's: naira), which staff can change; never euros.
+  // In the institution's own currency (Nigeria's: naira), which staff can change.
   await expect(dialog.getByRole('radio', { name: '₦' })).toHaveAttribute('aria-checked', 'true');
-  await expect(dialog.getByRole('radio')).toHaveText(['£', 'US$', '₦']);
+  await expect(dialog.getByRole('radio')).toHaveText(['£', 'US$', '€', '₦']);
   await dialog.getByLabel('Seats').fill('200');
   await expect(dialog.getByLabel('Amount')).toHaveValue('9000000');
   // Seats × the yearly price × months ÷ 12, in the chosen currency, until it's changed by hand.
@@ -418,6 +418,8 @@ test('staff issue an invoice; the admin pays it and comes back to a confirmation
   await expect(dialog.getByLabel('Amount')).toHaveValue('9000');
   await dialog.getByRole('radio', { name: '£' }).click();
   await expect(dialog.getByLabel('Amount')).toHaveValue('7200');
+  await dialog.getByRole('radio', { name: '€' }).click();
+  await expect(dialog.getByLabel('Amount')).toHaveValue('8400');
   await dialog.getByRole('radio', { name: '₦' }).click();
   await expect(dialog.getByLabel('Amount')).toHaveValue('9000000');
   await dialog.getByLabel('Seats').fill('20');
@@ -468,7 +470,7 @@ test('staff issue an invoice; the admin pays it and comes back to a confirmation
   await expect.poll(() => m.inst.invoices[v2].status).toBe('void');
 });
 
-test('an invoice issued in euros before still shows, pays and is confirmed as issued', async ({ page }) => {
+test('an invoice in euros shows, pays and is confirmed in euros', async ({ page }) => {
   const m = new MockBackend({ payOn: true });
   const { inst } = m.inst.seedSchool();
   const ref = 'kaivon-inv-000000000000000000000009';

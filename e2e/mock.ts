@@ -57,13 +57,13 @@ export interface MockOptions {
    * has no /api/geo: the page keeps the time zone's guess). */
   country?: string;
   /** The currencies the server has Pro's prices in (web_plan_prices): all three unless said. */
-  serverCurrencies?: ('USD' | 'GBP' | 'NGN')[];
+  serverCurrencies?: ('USD' | 'GBP' | 'EUR' | 'NGN')[];
   /** web-pay's answers to "confirm" for Pro, one per ask (the last repeats): paid unless said. */
   confirm?: Record<string, unknown>[];
 }
 
 /** Pro's prices on the server (web_plan_prices), by currency. */
-const SERVER_PRICES = { pro: { USD: 7.99, GBP: 6.49, NGN: 7990 }, student: { USD: 5.99, GBP: 4.99, NGN: 5990 } } as const;
+const SERVER_PRICES = { pro: { USD: 7.99, GBP: 6.49, EUR: 7.49, NGN: 7990 }, student: { USD: 5.99, GBP: 4.99, EUR: 5.49, NGN: 5990 } } as const;
 
 export class MockBackend {
   db: Record<Table, Row[]> = Object.fromEntries(TABLES.map((t) => [t, []])) as unknown as Record<Table, Row[]>;
@@ -125,7 +125,7 @@ export class MockBackend {
   confirms = 0;
 
   private currencies() {
-    return this.opts.serverCurrencies ?? (['USD', 'GBP', 'NGN'] as const);
+    return this.opts.serverCurrencies ?? (['USD', 'GBP', 'EUR', 'NGN'] as const);
   }
 
   /** An assignment with its document, ready to open. */

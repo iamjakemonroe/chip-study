@@ -12,7 +12,7 @@ import { referralLink } from '../lib/referral.ts';
 import type { Invoice, StaffInstitution, StaffRep } from '../lib/types.ts';
 import { toast } from '../store/toast.ts';
 
-const CURRENCY_LABEL: Record<Currency, string> = { GBP: '£', USD: 'US$', NGN: '₦' };
+const CURRENCY_LABEL: Record<Currency, string> = { GBP: '£', USD: 'US$', EUR: '€', NGN: '₦' };
 
 /** An institution's invoices, for Kaivon staff: issue one (seats, months, currency and amount, as
  * agreed with the institution) or cancel an open one. Its admins pay it in Chip Study. */

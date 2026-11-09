@@ -2,8 +2,8 @@ import { expect, test, type Page } from '@playwright/test';
 import { nothingClipped } from './layout';
 import { MockBackend, type MockOptions } from './mock';
 
-/** Prices in exactly one currency, the visitor's: naira in Nigeria, pounds in the UK, US dollars
- * everywhere else. The page guesses from the time zone at once, and the country Cloudflare sees
+/** Prices in exactly one currency, the visitor's: naira in Nigeria, pounds in the UK, euros where
+ * the euro is the money, US dollars everywhere else (Switzerland included). The page guesses from the time zone at once, and the country Cloudflare sees
  * (/api/geo, answered by the mock) settles it; checkout charges what's shown. */
 
 /** Every price-looking thing on the page, by currency symbol. */
@@ -130,6 +130,71 @@ test.describe('a visitor in the UK', () => {
     await expect(page.getByText(/Students get Pro for £4\.99 a month/)).toBeVisible();
     await expect(page.getByText(/costs £36 per student per year, billed yearly/)).toBeVisible();
     expect(await currenciesShown(page)).toEqual(['£']);
+  });
+});
+
+test.describe('a visitor in Germany', () => {
+  test.use({ timezoneId: 'Europe/Berlin' });
+
+  test('sees euros everywhere, and pays in them', async ({ page }) => {
+    const { m, pricing } = await landing(page, { country: 'DE', payOn: true });
+    await expect(pricing.getByText('€7.49', { exact: true })).toBeVisible();
+    await expect(pricing.getByText('€0', { exact: true })).toBeVisible();
+    await expect(pricing.getByText('Students: Pro for €5.49 a month')).toBeVisible();
+    await expect(pricing.getByText('27% off')).toBeVisible();
+    await expect(pricing.getByText('Prices in euros. Payments by Flutterwave.')).toBeVisible();
+    await expect((await openFaq(page, 'Is there a student discount?')).getByText(/Students get Pro for €5\.49 a month instead of €7\.49/)).toBeVisible();
+    expect(await currenciesShown(page)).toEqual(['€']);
+    await nothingClipped(page);
+    await page.goto('/institutions#pricing');
+    await page.locator('#pricing').scrollIntoViewIfNeeded();
+    await expect(page.locator('#pricing').getByText('€42', { exact: true })).toBeVisible();
+    expect(await currenciesShown(page)).toEqual(['€']);
+    await page.goto('/terms');
+    await expect(page.getByText(/Chip Study Pro costs €7\.49 a month\. It renews/)).toBeVisible();
+    expect(await currenciesShown(page)).toEqual(['€']);
+    await m.install(page);
+    await page.goto(PLANS);
+    await expect(page.getByText('Prices in euros. Payments by Flutterwave.')).toBeVisible();
+    expect(await currenciesShown(page)).toEqual(['€']);
+    expect(await goPro(page, m, 'Go Pro for €7.49 a month')).toMatchObject({ plan: 'study.pro.monthly', currency: 'EUR' });
+  });
+
+  test('where the server has no price in euros yet, sees and pays US dollars, never a mix', async ({ page }) => {
+    const m = new MockBackend({ payOn: true, country: 'DE', serverCurrencies: ['USD', 'GBP', 'NGN'] });
+    await m.install(page);
+    await page.goto(PLANS);
+    await expect(page.getByRole('button', { name: 'Go Pro for $7.99 a month' })).toBeVisible();
+    expect(await currenciesShown(page)).toEqual(['$']);
+    expect(await goPro(page, m, 'Go Pro for $7.99 a month')).toMatchObject({ currency: 'USD' });
+  });
+});
+
+test.describe('a visitor in Switzerland', () => {
+  test.use({ timezoneId: 'Europe/Zurich' });
+
+  test('sees US dollars, not euros, and pays in them', async ({ page }) => {
+    const { m, pricing } = await landing(page, { country: 'CH', payOn: true });
+    await expect(pricing.getByText('$7.99', { exact: true })).toBeVisible();
+    expect(await currenciesShown(page)).toEqual(['$']);
+    await page.goto('/institutions#pricing');
+    await page.locator('#pricing').scrollIntoViewIfNeeded();
+    await expect(page.locator('#pricing').getByText('$45', { exact: true })).toBeVisible();
+    expect(await currenciesShown(page)).toEqual(['$']);
+    await m.install(page);
+    await page.goto(PLANS);
+    await expect(page.getByText(/^Prices in US dollars\./)).toBeVisible();
+    expect(await goPro(page, m, 'Go Pro for $7.99 a month')).toMatchObject({ currency: 'USD' });
+  });
+
+  test.describe('in a euro time zone', () => {
+    test.use({ timezoneId: 'Europe/Berlin' });
+
+    test('Cloudflare seeing Switzerland settles it on dollars', async ({ page }) => {
+      const { pricing } = await landing(page, { country: 'CH' });
+      await expect(pricing.getByText('$7.99', { exact: true })).toBeVisible();
+      expect(await currenciesShown(page)).toEqual(['$']);
+    });
   });
 });
 

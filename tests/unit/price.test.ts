@@ -21,19 +21,21 @@ describe('the price for institutions', () => {
     expect(priceLine(PRICES, 'GBP')).toBe('£36 per student per year');
     expect(priceLine(PRICES, 'USD')).toBe('$45 per student per year');
     expect(priceLine(PRICES, 'NGN')).toBe('₦45,000 per student per year');
-    for (const c of ['GBP', 'USD', 'NGN'] as const) expect(priceLine(PRICES, c)).not.toMatch(/\(or|\/|€/);
+    expect(priceLine(PRICES, 'EUR')).toBe('€42 per student per year');
+    for (const c of ['GBP', 'USD', 'EUR', 'NGN'] as const) expect(priceLine(PRICES, c)).not.toMatch(/\(or|\//);
   });
 
   it('falls back to US dollars where there’s no price in the visitor’s currency, and to nothing with neither', () => {
     expect(priceIn({ USD: PRICES.USD }, 'GBP')).toEqual({ currency: 'USD', per_student_year: 45, min_students: 50 });
     expect(priceLine({ USD: PRICES.USD }, 'GBP')).toBe('$45 per student per year');
     expect(priceLine({ EUR: PRICES.EUR }, 'GBP')).toBeNull();
+    expect(priceLine({ USD: PRICES.USD }, 'EUR')).toBe('$45 per student per year');
     expect(priceLine({}, 'GBP')).toBeNull();
     expect(minStudents(PRICES)).toBe(50);
   });
 
-  it('issues new invoices in pounds, dollars or naira, never euros', () => {
-    expect(INVOICE_CURRENCIES).toEqual(['GBP', 'USD', 'NGN']);
+  it('issues new invoices in pounds, dollars, euros or naira', () => {
+    expect(INVOICE_CURRENCIES).toEqual(['GBP', 'USD', 'EUR', 'NGN']);
   });
 
   it('works out an invoice: at least the minimum of students, for the months given', () => {
