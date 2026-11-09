@@ -1,6 +1,6 @@
 /** The Worker for study.kaivon.app: the room server's API under /api/rooms/:roomId/..., Python
- * for the code editor under /pyodide/ (pyodide.ts), and everything else from the built app (dist)
- * exactly as before.
+ * for the code editor under /pyodide/ (pyodide.ts), the visitor's country for prices at /api/geo
+ * (geo.ts), and everything else from the built app (dist) exactly as before.
  *
  * Every HTTP call carries the person's Supabase access token. The Worker checks it by calling
  * study_room_access as them, refuses unless they are in the room and it is live, and passes only
@@ -8,6 +8,7 @@
  * it uses a ticket from POST /ticket instead. The contract is docs/rooms.md. */
 import { ROOM, type ApiError, type ApiErrorCode, type TicketAnswer } from '../shared/rooms.ts';
 import { configured, type Env } from './env.ts';
+import { geo } from './geo.ts';
 import { servePyodide } from './pyodide.ts';
 import type { Answer, RtcOp } from './room.ts';
 import { REALTIME_API, SfuError, turnCredentials } from './sfu.ts';
@@ -100,6 +101,8 @@ async function api(request: Request, env: Env, url: URL): Promise<Response> {
 export default {
   async fetch(request, env): Promise<Response> {
     const url = new URL(request.url);
+    // The visitor's country, for the currency prices are shown in (before the rooms' API).
+    if (url.pathname === '/api/geo') return geo(request);
     if (url.pathname === '/api' || url.pathname.startsWith('/api/')) {
       try {
         return await api(request, env, url);
