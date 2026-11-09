@@ -628,6 +628,7 @@ test('study together, from the workspace', async ({ page }, info) => {
 for (const [who, timezoneId, country] of [
   ['us', 'America/New_York', 'US'],
   ['uk', 'Europe/London', 'GB'],
+  ['eu', 'Europe/Berlin', 'DE'],
   ['ng', 'Africa/Lagos', 'NG'],
 ] as const) {
   test.describe(`prices, ${who}`, () => {
