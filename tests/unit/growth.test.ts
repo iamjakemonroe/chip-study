@@ -151,9 +151,10 @@ describe('the new server errors, in words', () => {
 });
 
 describe('the price note', () => {
-  it('says the currency the prices are in', () => {
-    expect(priceNote('NGN')).toBe('Prices in naira. Payments by Flutterwave.');
-    expect(priceNote('USD')).toMatch(/^Prices in US dollars\./);
+  it('says the one currency the prices are in', () => {
+    expect(priceNote('NGN')).toBe('Prices in naira.');
+    expect(priceNote('GBP')).toBe('Prices in pounds.');
+    expect(priceNote('USD')).toBe('Prices in US dollars. Your bank converts if your card is in another currency.');
   });
 });
 

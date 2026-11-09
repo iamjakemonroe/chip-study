@@ -2,7 +2,8 @@ import { ArrowLeft } from 'lucide-react';
 import { useEffect } from 'react';
 import { Link } from 'react-router';
 import { Logo } from '../components/Logo.tsx';
-import { privacy, terms, type LegalDoc } from '../content/legal.ts';
+import { privacy, termsIn, type LegalDoc } from '../content/legal.ts';
+import { useCurrency } from '../lib/currency.ts';
 import { site } from '../content/site.ts';
 
 function LegalPage({ doc }: { doc: LegalDoc }) {
@@ -53,5 +54,9 @@ function LegalPage({ doc }: { doc: LegalDoc }) {
   );
 }
 
-export const Terms = () => <LegalPage doc={terms} />;
+export function Terms() {
+  const currency = useCurrency();
+  return <LegalPage doc={termsIn(currency)} />;
+}
+
 export const Privacy = () => <LegalPage doc={privacy} />;

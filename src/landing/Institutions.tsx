@@ -5,7 +5,8 @@ import { Orb } from '../components/Orb.tsx';
 import { CAN_SEE, CANT_SEE } from '../content/institutions.ts';
 import { site } from '../content/site.ts';
 import { useInstitutionPrices } from '../institution/usePrices.ts';
-import { formatPrice, minStudents, priceCurrencies, priceLine, visitorPriceCurrency, type InstitutionPrices } from '../lib/institutionPrice.ts';
+import { useCurrency, type Currency } from '../lib/currency.ts';
+import { formatPrice, minStudents, priceIn, priceLine, type InstitutionPrices } from '../lib/institutionPrice.ts';
 import '../styles/landing.css';
 import { HeroLight } from './HeroLight.tsx';
 import { Arrow, Footer, SectionHead, useSmoothScroll } from './parts.tsx';
@@ -333,14 +334,15 @@ function Privacy() {
 
 function Pilot() {
   const prices = useInstitutionPrices();
-  const line = prices ? priceLine(prices, visitorPriceCurrency()) : null;
+  const currency = useCurrency();
+  const line = prices ? priceLine(prices, currency) : null;
   const steps = [
     ['Register', 'Tell us about your institution on a short form. You’ll need a Kaivon account, which is free.'],
     ['We check it', 'Kaivon confirms you’re a real school, college or university, sets your seats and pilot length, and confirms your email domain.'],
     ['Bring students in', 'Make classes, send invite links, or let students join with their school email. Each of them sees what you’ll see first.'],
     [
       'Then, one price per student',
-      line ? `${line.replace(/ \(or .*\)$/, '')}, billed yearly by invoice, from ${minStudents(prices!)} students. Kaivon sends the invoice when you’re ready to carry on.` : 'A price per student, billed yearly by invoice. Kaivon sends the invoice when you’re ready to carry on.',
+      line ? `${line}, billed yearly by invoice, from ${minStudents(prices!)} students. Kaivon sends the invoice when you’re ready to carry on.` : 'A price per student, billed yearly by invoice. Kaivon sends the invoice when you’re ready to carry on.',
     ],
   ];
   return (
@@ -361,12 +363,11 @@ function Pilot() {
   );
 }
 
-/** The price, in the visitor's currency first and the others beside it, with what it covers. */
+/** The price, in the visitor's currency and only that one, with what it covers. */
 function Pricing() {
   const prices = useInstitutionPrices();
-  const first = visitorPriceCurrency();
-  const order = prices ? priceCurrencies(prices, first) : [];
-  const main = order[0];
+  const currency = useCurrency();
+  const main = prices ? priceIn(prices, currency) : null;
   return (
     <section id="pricing" className="l-section scroll-mt-20 pt-0 md:pt-0" aria-labelledby="pricing-title">
       <div className="l-wrap">
@@ -382,22 +383,12 @@ function Pricing() {
             <div className="grid gap-8 md:grid-cols-[1fr_1.1fr] md:items-center">
               <div>
                 <p className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-                  <span className="text-5xl font-semibold tracking-[-0.035em]">{formatPrice(prices[main]!.per_student_year, main)}</span>
+                  <span className="text-5xl font-semibold tracking-[-0.035em]">{formatPrice(main.per_student_year, main.currency)}</span>
                   <span className="text-ink-3">per student per year</span>
                 </p>
                 <p className="mt-3 leading-relaxed text-ink-2">
                   Billed yearly by invoice, from {minStudents(prices)} students, after a free one-term pilot. Teachers and admins don’t take seats.
                 </p>
-                {order.length > 1 && (
-                  <p className="mt-4 flex flex-wrap items-center gap-2 text-sm text-ink-3">
-                    Also
-                    {order.slice(1).map((c) => (
-                      <span key={c} className="rounded-full border border-line bg-white px-2.5 py-0.5 font-semibold text-ink-2">
-                        {formatPrice(prices[c]!.per_student_year, c)}
-                      </span>
-                    ))}
-                  </p>
-                )}
               </div>
               <div>
                 <ul className="space-y-3">
@@ -430,8 +421,8 @@ function Pricing() {
   );
 }
 
-function faq(prices: InstitutionPrices | null | undefined): string[][] {
-  const line = prices ? priceLine(prices, visitorPriceCurrency()) : null;
+function faq(prices: InstitutionPrices | null | undefined, currency: Currency): string[][] {
+  const line = prices ? priceLine(prices, currency) : null;
   return FAQ.map(([q, a]) =>
     q === 'What does it cost?' && line ? [q, `A free one-term pilot first. After that, ${line}, billed yearly by invoice, from ${minStudents(prices!)} students. Teachers and admins don’t take seats.`] : [q, a],
   );
@@ -460,12 +451,13 @@ const FAQ = [
 
 function Faq() {
   const prices = useInstitutionPrices();
+  const currency = useCurrency();
   return (
     <section id="faq" className="l-section" aria-labelledby="faq-title">
       <div className="l-wrap max-w-3xl">
         <SectionHead id="faq-title" kicker="Questions" title="What institutions ask." />
         <div className="mt-12 space-y-3">
-          {faq(prices).map(([q, a]) => (
+          {faq(prices, currency).map(([q, a]) => (
             <details key={q} className="l-faq r-up">
               <summary>
                 <span>{q}</span>

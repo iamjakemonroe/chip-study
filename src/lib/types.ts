@@ -429,7 +429,8 @@ export interface Invoice {
   label: string;
   seats: number;
   months: number;
-  currency: 'USD' | 'NGN';
+  /** As issued: GBP, USD or NGN, or EUR for an invoice issued in euros before. */
+  currency: 'GBP' | 'USD' | 'NGN' | 'EUR';
   amount: number;
   status: 'open' | 'paid' | 'void';
   created_at: string;

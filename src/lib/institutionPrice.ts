@@ -1,57 +1,37 @@
 /** The price for institutions (study_institution_prices): per student per year, billed yearly,
  * from a minimum number of students, after a free one-term pilot. Pure, so it can be tested. */
+import { formatMoney, type Currency } from './currency.ts';
 
-export type PriceCurrency = 'GBP' | 'USD' | 'EUR' | 'NGN';
+/** A currency the price, or an invoice, can be in. Visitors see GBP, USD or NGN (the rule in
+ * currency.ts); EUR stays only so invoices already issued in euros show and pay as issued. */
+export type PriceCurrency = Currency | 'EUR';
 
 export type InstitutionPrices = Partial<Record<PriceCurrency, { per_student_year: number; min_students: number }>>;
 
-/** The order the others follow, after the visitor's own. */
-export const PRICE_ORDER: PriceCurrency[] = ['GBP', 'USD', 'EUR', 'NGN'];
+/** The currencies a new invoice can be in, in the order staff see them. */
+export const INVOICE_CURRENCIES: Currency[] = ['GBP', 'USD', 'NGN'];
 
-/** The visitor's currency, from their time zone: naira in Nigeria, pounds in the UK, euros in the
- * rest of Europe, dollars everywhere else. */
-export function priceCurrencyFor(timeZone: string | undefined): PriceCurrency {
-  if (timeZone === 'Africa/Lagos') return 'NGN';
-  if (timeZone === 'Europe/London') return 'GBP';
-  if (timeZone?.startsWith('Europe/')) return 'EUR';
-  return 'USD';
-}
-
-export function visitorPriceCurrency(): PriceCurrency {
-  try {
-    return priceCurrencyFor(Intl.DateTimeFormat().resolvedOptions().timeZone);
-  } catch {
-    return 'USD';
-  }
-}
-
-const SYMBOL: Record<PriceCurrency, string> = { GBP: '£', USD: '$', EUR: '€', NGN: '₦' };
-
-/** "£36", "$45", "€42", "₦45,000"; pence and cents only when there are some. */
+/** "£36", "$45", "₦45,000"; pence and cents only when there are some ("£1,912.50"). */
 export function formatPrice(amount: number, currency: PriceCurrency): string {
-  const whole = Math.round(amount * 100) % 100 === 0;
-  const n = currency === 'NGN' || whole ? Math.round(amount).toLocaleString('en-GB') : amount.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  return `${SYMBOL[currency]}${n}`;
+  return formatMoney(amount, currency, { trim: true });
 }
 
-/** The currencies there are prices in: the visitor's first, then the rest in the usual order. */
-export function priceCurrencies(prices: InstitutionPrices, first: PriceCurrency): PriceCurrency[] {
-  const have = PRICE_ORDER.filter((c) => prices[c]);
-  return have.includes(first) ? [first, ...have.filter((c) => c !== first)] : have;
+/** The price in [currency], or in US dollars when there's none in it (which is what an invoice
+ * would then be in), or null with neither. */
+export function priceIn(prices: InstitutionPrices, currency: Currency): { currency: Currency; per_student_year: number; min_students: number } | null {
+  const pick = prices[currency] ? currency : prices.USD ? 'USD' : null;
+  return pick ? { currency: pick, ...prices[pick]! } : null;
 }
 
-/** "£36 per student per year (or $45 / €42 / ₦45,000)", the visitor's currency first. */
-export function priceLine(prices: InstitutionPrices, first: PriceCurrency): string | null {
-  const order = priceCurrencies(prices, first);
-  if (!order.length) return null;
-  const [main, ...rest] = order;
-  const others = rest.map((c) => formatPrice(prices[c]!.per_student_year, c)).join(' / ');
-  return `${formatPrice(prices[main]!.per_student_year, main)} per student per year${others ? ` (or ${others})` : ''}`;
+/** "£36 per student per year", in the one currency the visitor sees. */
+export function priceLine(prices: InstitutionPrices, currency: Currency): string | null {
+  const p = priceIn(prices, currency);
+  return p ? `${formatPrice(p.per_student_year, p.currency)} per student per year` : null;
 }
 
 /** The fewest students a yearly invoice is for. */
 export function minStudents(prices: InstitutionPrices): number {
-  return Math.max(...PRICE_ORDER.map((c) => prices[c]?.min_students ?? 0), 0) || 50;
+  return Math.max(...(['GBP', 'USD', 'EUR', 'NGN'] as const).map((c) => prices[c]?.min_students ?? 0), 0) || 50;
 }
 
 /** What an invoice comes to: seats (at least the minimum) × the yearly price × months ÷ 12, to

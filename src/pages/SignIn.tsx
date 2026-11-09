@@ -5,7 +5,8 @@ import { Navigate, useNavigate, useSearchParams } from 'react-router';
 import { Logo } from '../components/Logo.tsx';
 import { Orb } from '../components/Orb.tsx';
 import { Spinner } from '../components/ui.tsx';
-import { site } from '../content/site.ts';
+import { PLAN_PRICES, studentSaving } from '../content/site.ts';
+import { formatMoney, useCurrency } from '../lib/currency.ts';
 import { looksLikeSchoolEmail } from '../lib/school.ts';
 import { safeNext } from '../lib/session.ts';
 import { finishOAuth, sendCode, signInWith, SSO_ON, useAuth, verifyCode } from '../store/auth.ts';
@@ -21,6 +22,7 @@ export function SignIn() {
   const [step, setStep] = useState<'email' | 'code'>('email');
   const [email, setEmail] = useState('');
   const school = looksLikeSchoolEmail(email);
+  const currency = useCurrency();
   const [code, setCode] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -184,7 +186,7 @@ export function SignIn() {
                 </div>
                 <p className={`mt-2 flex items-center gap-1.5 text-sm ${school ? 'font-semibold text-mint' : 'text-ink-3'}`} aria-live="polite">
                   <GraduationCap size={15} className="flex-none" />
-                  {school ? `A school email: Pro is yours at the student price, $${site.studentPrice.toFixed(2)} a month.` : 'Student? Use your school email and Pro is 25% off.'}
+                  {school ? `A school email: Pro is yours at the student price, ${formatMoney(PLAN_PRICES[currency].student, currency)} a month.` : `Student? Use your school email and Pro is ${studentSaving(PLAN_PRICES[currency])}% off.`}
                 </p>
                 {error && (
                   <p className="mt-3 text-sm text-rose" role="alert">

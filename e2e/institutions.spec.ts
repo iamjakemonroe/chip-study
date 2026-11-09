@@ -39,11 +39,11 @@ test('the page for institutions: who it’s for, what staff can and can’t see,
   const faq = page.locator('details', { hasText: 'We already give students an AI tool' });
   await faq.locator('summary').click();
   await expect(faq.getByText(/Keep it\. Chip Study works alongside/)).toBeVisible();
-  // The price, in naira first in Lagos, with the others beside it.
+  // The price, in naira in Lagos, and in nothing else.
   const pricing = page.locator('#pricing');
   await expect(pricing.getByText('₦45,000', { exact: true })).toBeAttached();
   await expect(pricing.getByText(/Billed yearly by invoice, from 50 students, after a free one-term pilot/)).toBeAttached();
-  for (const other of ['£36', '$45', '€42']) await expect(pricing.getByText(other, { exact: true })).toBeAttached();
+  for (const other of ['£36', '$45', '€42']) await expect(page.getByText(other)).toHaveCount(0);
   await expect(page.getByText(/Ask us about pricing/i)).toHaveCount(0);
   await nothingClipped(page);
   await page.getByRole('link', { name: /Register your institution/ }).first().click();

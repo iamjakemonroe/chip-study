@@ -408,10 +408,17 @@ test('staff issue an invoice; the admin pays it and comes back to a confirmation
   await page.getByRole('tab', { name: 'Approved', exact: true }).click();
   await page.getByRole('listitem').filter({ hasText: 'Lagos Bay University' }).getByRole('button', { name: 'Invoices' }).click();
   const dialog = page.getByRole('dialog', { name: 'Invoices for Lagos Bay University' });
+  // In the institution's own currency (Nigeria's: naira), which staff can change; never euros.
+  await expect(dialog.getByRole('radio', { name: '₦' })).toHaveAttribute('aria-checked', 'true');
+  await expect(dialog.getByRole('radio')).toHaveText(['£', 'US$', '₦']);
   await dialog.getByLabel('Seats').fill('200');
-  await expect(dialog.getByLabel('Amount')).toHaveValue('9000');
-  await dialog.getByRole('radio', { name: '₦' }).click();
+  await expect(dialog.getByLabel('Amount')).toHaveValue('9000000');
   // Seats × the yearly price × months ÷ 12, in the chosen currency, until it's changed by hand.
+  await dialog.getByRole('radio', { name: 'US$' }).click();
+  await expect(dialog.getByLabel('Amount')).toHaveValue('9000');
+  await dialog.getByRole('radio', { name: '£' }).click();
+  await expect(dialog.getByLabel('Amount')).toHaveValue('7200');
+  await dialog.getByRole('radio', { name: '₦' }).click();
   await expect(dialog.getByLabel('Amount')).toHaveValue('9000000');
   await dialog.getByLabel('Seats').fill('20');
   await expect(dialog.getByLabel('Amount')).toHaveValue('2250000');
@@ -455,7 +462,7 @@ test('staff issue an invoice; the admin pays it and comes back to a confirmation
 test.describe('from London', () => {
   test.use({ timezoneId: 'Europe/London' });
 
-  test('the institutions page shows the price in pounds first, the others beside it', async ({ page }) => {
+  test('the institutions page shows the price in pounds, and only pounds', async ({ page }) => {
     const m = new MockBackend();
     await m.install(page, { signedIn: false });
     await page.goto('/institutions#pricing');
@@ -463,10 +470,11 @@ test.describe('from London', () => {
     await pricing.scrollIntoViewIfNeeded();
     await expect(pricing.getByText('£36', { exact: true }).first()).toBeVisible();
     await expect(pricing.getByText('per student per year')).toBeVisible();
-    for (const other of ['$45', '€42', '₦45,000']) await expect(pricing.getByText(other, { exact: true })).toBeVisible();
+    for (const other of ['$45', '€42', '₦45,000']) await expect(page.getByText(other)).toHaveCount(0);
     const faq = page.locator('details', { hasText: 'What does it cost?' });
     await faq.locator('summary').click();
-    await expect(faq.getByText(/£36 per student per year \(or \$45 \/ €42 \/ ₦45,000\), billed yearly by invoice, from 50 students/)).toBeVisible();
+    await expect(faq.getByText(/After that, £36 per student per year, billed yearly by invoice, from 50 students/)).toBeVisible();
+    expect(await page.locator('body').innerText()).not.toMatch(/[$€₦]\s?\d/);
     await page.waitForTimeout(1200);
     await nothingClipped(page);
   });

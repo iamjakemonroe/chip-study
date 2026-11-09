@@ -4,7 +4,7 @@ import { Confirm, Field, Segmented, Spinner } from '../components/ui.tsx';
 import { BLACKBOARD_APP_ID, checkPlatform, ltiAddresses, PLATFORM_HELP, PLATFORM_LABEL, PRESETS, type PlatformFields, type PlatformKind } from '../content/platforms.ts';
 import { site } from '../content/site.ts';
 import { institutionInvoices, ltiPlatformRemove, ltiPlatforms, ltiPlatformSet, payInvoice, setInstitutionMinors } from '../lib/api.ts';
-import { money } from '../lib/currency.ts';
+import { formatMoney } from '../lib/currency.ts';
 import { dayText } from '../lib/institutions.ts';
 import { SUPABASE_URL } from '../lib/supabase.ts';
 import type { InstitutionDetails, Invoice, LtiPlatform } from '../lib/types.ts';
@@ -280,7 +280,7 @@ export function InvoicesSetting({ inst, reloadKey }: { inst: InstitutionDetails;
               <span className="min-w-0 flex-1 basis-48">
                 <span className="block font-semibold">{v.label}</span>
                 <span className="block text-xs text-ink-3">
-                  {v.seats.toLocaleString()} seats for {v.months === 1 ? '1 month' : `${v.months} months`} · {money(v.amount, v.currency)}
+                  {v.seats.toLocaleString()} seats for {v.months === 1 ? '1 month' : `${v.months} months`} · {formatMoney(v.amount, v.currency)}
                 </span>
               </span>
               {v.status === 'open' ? (
@@ -297,7 +297,7 @@ export function InvoicesSetting({ inst, reloadKey }: { inst: InstitutionDetails;
                     }
                   }}
                 >
-                  {paying === v.id ? <Spinner /> : `Pay ${money(v.amount, v.currency)}`}
+                  {paying === v.id ? <Spinner /> : `Pay ${formatMoney(v.amount, v.currency)}`}
                 </button>
               ) : (
                 <span className={`chip-tag flex-none ${v.status === 'paid' ? 'bg-mint-soft text-[#16795f]' : 'bg-paper-2 text-ink-3'}`}>

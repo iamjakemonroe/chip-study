@@ -2,14 +2,14 @@ import { useEffect, useState } from 'react';
 import { Logo } from '../components/Logo.tsx';
 import { Orb } from '../components/Orb.tsx';
 import { FREE_FEATURES, PRO_FEATURES, SCHOOL_EMAILS } from '../content/plans.ts';
-import { proLive, site } from '../content/site.ts';
+import { PLAN_PRICES, proLive, studentSaving } from '../content/site.ts';
 import '../styles/landing.css';
 import { HeroLight } from './HeroLight.tsx';
 import { Showcase } from './Showcase.tsx';
 import { ModesTour } from './ModesTour.tsx';
 import { useReveal } from './reveal.ts';
 import { Arrow, Footer, SectionHead, useSmoothScroll } from './parts.tsx';
-import { fromUsd, money, priceNote } from '../lib/currency.ts';
+import { formatMoney, priceNote, useCurrency, type Currency } from '../lib/currency.ts';
 
 /** study.kaivon.app for someone who isn't signed in: what Chip Study is, Chip's six modes, the
  * honest record, focus, the tools, the price and the questions people ask. It loads on its own,
@@ -620,15 +620,18 @@ function SchoolsCard() {
 function Pricing() {
   const free = FREE_FEATURES;
   const pro = PRO_FEATURES;
+  // In the visitor's currency, and only that one.
+  const currency = useCurrency();
+  const prices = PLAN_PRICES[currency];
   return (
     <section id="pricing" className="l-section" aria-labelledby="pricing-title">
       <div className="l-wrap">
         <SectionHead id="pricing-title" kicker="Pricing" title="Fair, and simple." lead="Free is a real tutor, every day. Pro is for when you want Chip’s deepest thinking. Chip’s time is counted fairly: a quick question uses less than a long draft." />
         <div className="mx-auto mt-14 grid max-w-4xl gap-5 md:grid-cols-2">
-          <PriceCard name="Free" price="$0" note="free, always" items={free} cta={<a href="/signin" className="btn btn-ghost w-full">Start free</a>} />
+          <PriceCard name="Free" price={formatMoney(0, currency, { trim: true })} note="free, always" items={free} cta={<a href="/signin" className="btn btn-ghost w-full">Start free</a>} />
           <PriceCard
             name="Pro"
-            price={money(fromUsd(site.price))}
+            price={formatMoney(prices.pro, currency)}
             note="a month · cancel any time"
             items={pro}
             glow
@@ -645,7 +648,7 @@ function Pricing() {
             </span>
             <div className="flex-1">
               <p className="text-lg font-semibold">
-                Students: Pro for {money(fromUsd(site.studentPrice))} a month <span className="chip-tag ml-1 align-middle bg-mint-soft text-mint">{Math.round((1 - site.studentPrice / site.price) * 100)}% off</span>
+                Students: Pro for {formatMoney(prices.student, currency)} a month <span className="chip-tag ml-1 align-middle bg-mint-soft text-mint">{studentSaving(prices)}% off</span>
               </p>
               <p className="mt-1 text-[0.9375rem] leading-relaxed text-ink-2">
                 Sign up with your school email ({SCHOOL_EMAILS}) and the student price is yours. Everything in Pro, with about 110 in-depth messages a month from Chip’s best model.
@@ -656,7 +659,7 @@ function Pricing() {
             </a>
           </div>
         </div>
-        <p className="mt-6 text-center text-sm text-ink-3">{priceNote()}</p>
+        <p className="mt-6 text-center text-sm text-ink-3">{priceNote(currency)} Payments by Flutterwave.</p>
       </div>
     </section>
   );
@@ -686,7 +689,8 @@ function PriceCard({ name, price, note, items, cta, glow, badge }: { name: strin
   );
 }
 
-const FAQ = [
+/** Each question, and its answer (in the visitor's currency, where it has a price). */
+const FAQ: [string, string | ((c: Currency) => string)][] = [
   ['Will it actually help me learn?', 'That’s the point. Chip’s default is to guide you: it asks what you think, gives hints and lets you get there, and explains step by step when you want it straight. It checks your own work and tells you why something’s wrong, and turns what you study into quizzes and flashcards that come back just before you’d forget them.'],
   ['Is using Chip cheating?', 'Chip is built to help you learn and to keep you honest. It teaches, plans and gives feedback, and when it writes with you, the words are marked and everything is recorded, so you can declare it. Your course decides what help is allowed; Chip respects that, and we suggest you check its rules.'],
   ['Will Chip just write my essay?', 'No. Chip helps you write it in your own words: it gives feedback, asks questions and helps you plan. If you ask it to draft a paragraph or improve a selection, it does it in your style, and the text stays marked as Chip’s until you rewrite it. Your declaration shows how much of your final document is still in Chip’s words.'],
@@ -694,13 +698,18 @@ const FAQ = [
   ['Which AI is Chip?', 'Chip runs on Claude, made by Anthropic. Free uses Chip Fast (Claude Haiku), and Pro adds Chip’s best model (Claude Opus) and web research. Anthropic doesn’t use your work to train its models.'],
   ['Can I use my Utopia account?', 'Yes. Chip Study uses your Kaivon account, the same one you play Utopia with. Sign in with your email and the code we send. New here? We’ll make you an account.'],
   ['Is my work private?', 'Your notes, documents, cards and chats are yours alone. We don’t sell your data or show ads. You can delete anything, or all your study data, at any time.'],
-  ['Is there a student discount?', `Yes. Students get Pro for ${money(fromUsd(site.studentPrice))} a month instead of ${money(fromUsd(site.price))}. Sign up with your school email (${SCHOOL_EMAILS}) and the Plan page shows the student price. It’s everything in Pro, with a little less of Chip’s best model: about 110 in-depth messages a month instead of 150.`],
+  [
+    'Is there a student discount?',
+    (c: Currency) =>
+      `Yes. Students get Pro for ${formatMoney(PLAN_PRICES[c].student, c)} a month instead of ${formatMoney(PLAN_PRICES[c].pro, c)}. Sign up with your school email (${SCHOOL_EMAILS}) and the Plan page shows the student price. It’s everything in Pro, with a little less of Chip’s best model: about 110 in-depth messages a month instead of 150.`,
+  ],
   ['What happens when I run out of Chip time?', 'Everything else keeps working: your notes, editor, review deck, timer and record. Chip’s time comes back the next day. Pro gives you much more, and Chip’s best model.'],
   ['Can I study with friends?', 'Yes. Open a study room on any assignment or topic and share the link. Everyone edits the same work at once, with video, chat and one shared Chip, and nothing is recorded. Free rooms take up to 4 people for an hour; Pro rooms take 10, with no time limit. Personal rooms are for people 18 and over. Schools can open class rooms for up to 50.'],
   ['Does it work on my phone and iPad?', 'Yes. Chip Study is made for phones, tablets and laptops alike, and you can install it like an app from your browser.'],
 ];
 
 function Faq() {
+  const currency = useCurrency();
   return (
     <section id="faq" className="l-section" aria-labelledby="faq-title">
       <div className="l-wrap max-w-3xl">
@@ -712,7 +721,7 @@ function Faq() {
                 <span>{q}</span>
                 <span className="l-faq-icon" aria-hidden="true" />
               </summary>
-              <p>{a}</p>
+              <p>{typeof a === 'function' ? a(currency) : a}</p>
             </details>
           ))}
         </div>

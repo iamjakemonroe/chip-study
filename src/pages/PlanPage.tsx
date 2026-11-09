@@ -8,11 +8,11 @@ import { Confirm, Ring, Spinner } from '../components/ui.tsx';
 import { chipTime, describe } from '../lib/allowance.ts';
 import { cancelPro, confirmPayment, knownPayStatus, PAY_WAIT, payStatus, subscribePro, type PayStatus } from '../lib/api.ts';
 import { FREE_FEATURES, INSTITUTION_FEATURES, PRO_FEATURES, SCHOOL_EMAILS, STUDENT_FEATURES } from '../content/plans.ts';
-import { site } from '../content/site.ts';
+import { PLAN_PRICES } from '../content/site.ts';
 import { useAuth } from '../store/auth.ts';
 import { useInstitutions } from '../store/institutions.ts';
 import { toast } from '../store/toast.ts';
-import { CURRENCY, fromUsd, money, priceNote } from '../lib/currency.ts';
+import { chargeCurrency, formatMoney, priceNote, useCurrency } from '../lib/currency.ts';
 import { proThrough, VIA_INSTITUTION_NOTE } from '../lib/institutions.ts';
 import type { Me } from '../lib/types.ts';
 
@@ -70,10 +70,13 @@ export function PlanPage() {
   const open = !!pay?.on && !pay.test;
   const fast = me ? chipTime(me, 'fast') : null;
   const best = me ? chipTime(me, 'best') : null;
-  // In this buyer's currency: naira in Nigeria.
-  const price = me?.prices?.[CURRENCY] ?? (CURRENCY === 'USD' ? me?.price?.amount : undefined) ?? fromUsd(site.price);
-  const studentPrice =
-    me?.student_prices?.[CURRENCY] ?? (CURRENCY === 'USD' ? me?.student_price?.amount : undefined) ?? fromUsd(site.studentPrice);
+  // In the visitor's currency, as the server prices it: where it has no price in that currency,
+  // checkout charges US dollars, so the page shows them too.
+  const visitor = useCurrency();
+  const currency = chargeCurrency(visitor, me?.prices, me?.student_prices);
+  const price = me?.prices?.[currency] ?? (currency === 'USD' ? me?.price?.amount : undefined) ?? PLAN_PRICES[currency].pro;
+  const studentPrice = me?.student_prices?.[currency] ?? (currency === 'USD' ? me?.student_price?.amount : undefined) ?? PLAN_PRICES[currency].student;
+  const money = (n: number) => formatMoney(n, currency);
   // The Pro card shows the student plan to a school email without Pro, and to its members.
   const asStudent = me?.plan === 'student' || (me?.tier === 'free' && !!me.student?.eligible);
   const shown = asStudent ? studentPrice : price;
@@ -81,7 +84,8 @@ export function PlanPage() {
   async function go(plan: 'pro' | 'student') {
     setBusy(plan);
     try {
-      location.href = await subscribePro(plan);
+      // Charged in the currency the price is shown in.
+      location.href = await subscribePro(plan, currency);
     } catch (e) {
       toast((e as Error).message, 'warn');
       setBusy(null);
@@ -127,7 +131,7 @@ export function PlanPage() {
           <section className="mt-10 grid gap-5 lg:grid-cols-2">
             <PlanCard
               name="Free"
-              price="$0"
+              price={formatMoney(0, currency, { trim: true })}
               note="Free, always"
               features={FREE_FEATURES}
               current={me?.tier === 'free'}
@@ -197,7 +201,7 @@ export function PlanPage() {
               </div>
             </section>
           )}
-          <p className="mt-6 text-center text-sm text-ink-3">{priceNote()}</p>
+          <p className="mt-6 text-center text-sm text-ink-3">{priceNote(currency)} Payments by Flutterwave.</p>
           </>
         )}
       </main>

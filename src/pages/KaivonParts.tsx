@@ -4,19 +4,21 @@ import { ChipLoader } from '../components/ChipLoader.tsx';
 import { Confirm, Field, Modal, Segmented, Spinner } from '../components/ui.tsx';
 import { copyText } from '../institution/copy.ts';
 import { institutionInvoices, staffInvoiceCreate, staffInvoiceVoid, staffReps, staffSetRep } from '../lib/api.ts';
-import { money } from '../lib/currency.ts';
+import { currencyForCountry, formatMoney, type Currency } from '../lib/currency.ts';
 import { dayText } from '../lib/institutions.ts';
-import { formatPrice, invoiceAmount } from '../lib/institutionPrice.ts';
+import { formatPrice, INVOICE_CURRENCIES, invoiceAmount } from '../lib/institutionPrice.ts';
 import { useInstitutionPrices } from '../institution/usePrices.ts';
 import { referralLink } from '../lib/referral.ts';
 import type { Invoice, StaffInstitution, StaffRep } from '../lib/types.ts';
 import { toast } from '../store/toast.ts';
 
+const CURRENCY_LABEL: Record<Currency, string> = { GBP: '£', USD: 'US$', NGN: '₦' };
+
 /** An institution's invoices, for Kaivon staff: issue one (seats, months, currency and amount, as
  * agreed with the institution) or cancel an open one. Its admins pay it in Chip Study. */
 export function InvoicesModal({ inst, onClose }: { inst: StaffInstitution | null; onClose: () => void }) {
   const [list, setList] = useState<Invoice[] | null>(null);
-  const [form, setForm] = useState({ label: '', seats: '', months: '12', currency: 'USD' as 'USD' | 'NGN', amount: '' });
+  const [form, setForm] = useState({ label: '', seats: '', months: '12', currency: 'USD' as Currency, amount: '' });
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [voiding, setVoiding] = useState<Invoice | null>(null);
@@ -42,7 +44,8 @@ export function InvoicesModal({ inst, onClose }: { inst: StaffInstitution | null
     if (!inst) return;
     setList(null);
     setError('');
-    setForm({ label: `${inst.name}: Chip Study seats`, seats: String(inst.seats || 50), months: '12', currency: 'USD', amount: '' });
+    // In the institution's own currency (its country's, by the same rule as every price), which staff can change.
+    setForm({ label: `${inst.name}: Chip Study seats`, seats: String(inst.seats || 50), months: '12', currency: currencyForCountry(inst.country) ?? 'USD', amount: '' });
     setTyped(false);
     void load(inst.id);
   }, [inst, load]);
@@ -61,7 +64,7 @@ export function InvoicesModal({ inst, onClose }: { inst: StaffInstitution | null
     setError('');
     try {
       await staffInvoiceCreate(inst.id, { label: form.label.trim(), seats, months, currency: form.currency, amount });
-      toast(`Invoice made for ${money(amount, form.currency)}. Its admins can pay it in Chip Study.`, 'good');
+      toast(`Invoice made for ${formatMoney(amount, form.currency)}. Its admins can pay it in Chip Study.`, 'good');
       setTyped(false);
       await load(inst.id);
     } catch (err) {
@@ -86,7 +89,7 @@ export function InvoicesModal({ inst, onClose }: { inst: StaffInstitution | null
               <span className="min-w-0 flex-1 basis-48">
                 <span className="block font-semibold">{v.label}</span>
                 <span className="block text-xs text-ink-3">
-                  {v.seats.toLocaleString()} seats · {v.months} months · {money(v.amount, v.currency)} · made {dayText(v.created_at)}
+                  {v.seats.toLocaleString()} seats · {v.months} months · {formatMoney(v.amount, v.currency)} · made {dayText(v.created_at)}
                 </span>
               </span>
               {v.status === 'open' ? (
@@ -118,7 +121,7 @@ export function InvoicesModal({ inst, onClose }: { inst: StaffInstitution | null
           <div>
             <span className="label">Currency</span>
             <div className="flex h-[2.875rem] items-center">
-              <Segmented label="Currency" size="sm" value={form.currency} onChange={(currency) => setForm({ ...form, currency })} options={[{ value: 'USD', label: 'US$' }, { value: 'NGN', label: '₦' }]} />
+              <Segmented label="Currency" size="sm" value={form.currency} onChange={(currency) => setForm({ ...form, currency })} options={INVOICE_CURRENCIES.map((c) => ({ value: c, label: CURRENCY_LABEL[c] }))} />
             </div>
           </div>
           <Field id="inv-amount" label="Amount">
@@ -155,7 +158,7 @@ export function InvoicesModal({ inst, onClose }: { inst: StaffInstitution | null
       <Confirm
         open={!!voiding}
         title="Cancel this invoice?"
-        body={`${voiding?.label ?? ''} for ${voiding ? money(voiding.amount, voiding.currency) : ''} can’t be paid after this.`}
+        body={`${voiding?.label ?? ''} for ${voiding ? formatMoney(voiding.amount, voiding.currency) : ''} can’t be paid after this.`}
         yes="Cancel invoice"
         danger
         onClose={() => setVoiding(null)}

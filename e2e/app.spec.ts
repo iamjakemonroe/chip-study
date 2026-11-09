@@ -33,9 +33,9 @@ async function askChip(page: Page, mode: string, text: string) {
   await page.getByRole('button', { name: 'Send' }).click();
 }
 
-// The landing page's prices, in dollars: as anyone outside Nigeria sees them.
-test.describe('outside Nigeria', () => {
-  test.use({ timezoneId: 'Europe/London' });
+// The landing page's prices, in dollars: as a visitor in the US sees them.
+test.describe('in the US', () => {
+  test.use({ timezoneId: 'America/New_York' });
 
   test('landing leads with learning, and every link goes somewhere', async ({ page }) => {
     const errors: string[] = [];
@@ -273,9 +273,9 @@ test('signing out asks first, from the menu and from settings', async ({ page })
 });
 
 // The e2e browsers are in Lagos (Africa/Lagos), where buyers pay in naira; these check the
-// dollar prices everyone else sees, so they shop from London.
-test.describe('paying in US dollars, outside Nigeria', () => {
-  test.use({ timezoneId: 'Europe/London' });
+// dollar prices the US (and everywhere but Nigeria and the UK) sees, so they shop from New York.
+test.describe('paying in US dollars, in the US', () => {
+  test.use({ timezoneId: 'America/New_York' });
 
   test('a school email sees Pro at the student price, and can still pick full Pro', async ({ page }) => {
     const m = new MockBackend({ payOn: true, student: true });

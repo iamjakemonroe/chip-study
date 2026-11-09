@@ -65,7 +65,9 @@ export interface MockInvoice {
   label: string;
   seats: number;
   months: number;
-  currency: 'USD' | 'NGN';
+  /** The database takes these four (study_institution_invoices_currency_check); new ones are
+   * GBP, USD or NGN, EUR only as issued before. */
+  currency: 'GBP' | 'USD' | 'NGN' | 'EUR';
   amount: number;
   status: 'open' | 'paid' | 'void';
   created_at: string;
@@ -830,7 +832,7 @@ export class MockInstitutions {
         label: String(a.p_label).trim(),
         seats: a.p_seats,
         months: a.p_months,
-        currency: String(a.p_currency).toUpperCase() as 'USD' | 'NGN',
+        currency: String(a.p_currency).toUpperCase() as MockInvoice['currency'],
         amount: Math.round(Number(a.p_amount) * 100) / 100,
         status: 'open',
         created_at: now(),

@@ -1,5 +1,5 @@
 import { supabase } from './supabase.ts';
-import { CURRENCY } from './currency.ts';
+import type { Currency } from './currency.ts';
 import { institutionError } from './institutions.ts';
 import type { InstitutionPrices } from './institutionPrice.ts';
 import type {
@@ -374,10 +374,10 @@ async function askPayStatus(): Promise<PayStatus | null> {
 }
 
 /** Starts paying for Pro, or for the student plan (Pro at the student price, for a school email),
- * and answers the checkout link. */
-export async function subscribePro(plan: 'pro' | 'student' = 'pro'): Promise<string> {
+ * in [currency], the one its price was shown in, and answers the checkout link. */
+export async function subscribePro(plan: 'pro' | 'student', currency: Currency): Promise<string> {
   const { data, error } = await supabase.functions.invoke('web-pay', {
-    body: { action: 'subscribe', plan: plan === 'student' ? 'study.pro.student.monthly' : 'study.pro.monthly', currency: CURRENCY, app: 'study' },
+    body: { action: 'subscribe', plan: plan === 'student' ? 'study.pro.student.monthly' : 'study.pro.monthly', currency, app: 'study' },
   });
   const link = (data as { link?: string } | null)?.link;
   if (error || !link || !link.startsWith('https://')) {
@@ -683,7 +683,7 @@ export async function institutionInvoices(id: string): Promise<Invoice[]> {
   return rows.map((r) => ({ ...r, amount: Number(r.amount) }));
 }
 
-export async function staffInvoiceCreate(id: string, f: { label: string; seats: number; months: number; currency: 'USD' | 'NGN'; amount: number }): Promise<Invoice> {
+export async function staffInvoiceCreate(id: string, f: { label: string; seats: number; months: number; currency: Currency; amount: number }): Promise<Invoice> {
   return inst(
     await supabase.rpc('study_staff_invoice_create', { p_inst: id, p_label: f.label, p_seats: f.seats, p_months: f.months, p_currency: f.currency, p_amount: f.amount }),
     'Couldn’t make that invoice just now.',

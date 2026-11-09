@@ -5,7 +5,8 @@ import { site } from '../content/site.ts';
 import { minutesLabel } from '../lib/dates.ts';
 import { dayText, niceTop, weekLabel } from '../lib/institutions.ts';
 import type { InstitutionOverview } from '../lib/types.ts';
-import { minStudents, priceLine, visitorPriceCurrency } from '../lib/institutionPrice.ts';
+import { currencyForCountry, useCurrency } from '../lib/currency.ts';
+import { minStudents, priceLine } from '../lib/institutionPrice.ts';
 import type { InstitutionView } from './InstitutionPage.tsx';
 import { useInstitutionPrices } from './usePrices.ts';
 
@@ -162,7 +163,9 @@ function Count({ label, value }: { label: string; value: number }) {
 function StatusBanner({ ov }: { ov: InstitutionOverview }) {
   const i = ov.institution;
   const prices = useInstitutionPrices();
-  const line = prices ? priceLine(prices, visitorPriceCurrency())?.replace(/ \(or .*\)$/, '') : null;
+  // In the currency the institution's invoice would be in (its country's), else the visitor's.
+  const visitor = useCurrency();
+  const line = prices ? priceLine(prices, currencyForCountry(i.country) ?? visitor) : null;
   const price = line ? `${line}, billed yearly by invoice, from ${minStudents(prices!)} students` : 'one price per student, billed yearly by invoice';
   const contact = (
     <a className="font-semibold underline underline-offset-2" href={`mailto:${site.email}`}>

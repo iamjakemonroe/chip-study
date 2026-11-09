@@ -53,7 +53,15 @@ export interface MockOptions {
   name?: string;
   /** The age question's answer: adult unless said (null: not asked yet). */
   age?: 'adult' | 'guardian' | null;
+  /** The country /api/geo answers (Cloudflare's), or undefined for no answer (the preview server
+   * has no /api/geo: the page keeps the time zone's guess). */
+  country?: string;
+  /** The currencies the server has Pro's prices in (web_plan_prices): all three unless said. */
+  serverCurrencies?: ('USD' | 'GBP' | 'NGN')[];
 }
+
+/** Pro's prices on the server (web_plan_prices), by currency. */
+const SERVER_PRICES = { pro: { USD: 7.99, GBP: 6.49, NGN: 7990 }, student: { USD: 5.99, GBP: 4.99, NGN: 5990 } } as const;
 
 export class MockBackend {
   db: Record<Table, Row[]> = Object.fromEntries(TABLES.map((t) => [t, []])) as unknown as Record<Table, Row[]>;
@@ -104,6 +112,15 @@ export class MockBackend {
       await page.addInitScript(([key, value]) => localStorage.setItem(key, value), [AUTH_KEY, JSON.stringify(this.session())]);
     }
     await page.route(`${BASE}/**`, (route) => this.handle(route));
+    await page.route('**/api/geo', (route) =>
+      this.opts.country === undefined
+        ? route.fulfill({ status: 404, contentType: 'text/plain', body: 'Not found' })
+        : route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ country: this.opts.country }) }),
+    );
+  }
+
+  private currencies() {
+    return this.opts.serverCurrencies ?? (['USD', 'GBP', 'NGN'] as const);
   }
 
   /** An assignment with its document, ready to open. */
@@ -265,6 +282,8 @@ export class MockBackend {
       price: { amount: 7.99, currency: 'USD' },
       student: { eligible: !!this.opts.student, domain: this.opts.student ? 'strath.ac.uk' : 'gmail.com' },
       student_price: { amount: 5.99, currency: 'USD' },
+      prices: Object.fromEntries(this.currencies().map((c) => [c, SERVER_PRICES.pro[c]])),
+      student_prices: Object.fromEntries(this.currencies().map((c) => [c, SERVER_PRICES.student[c]])),
     };
   }
 
