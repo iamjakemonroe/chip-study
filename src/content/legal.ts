@@ -13,7 +13,7 @@ export interface LegalDoc {
   sections: { heading: string; body: Block[] }[];
 }
 
-const updated = '7 November 2026';
+const updated = '9 November 2026';
 const contact = site.email;
 
 /** The Terms, with every price in the one currency the reader sees and pays in. */
