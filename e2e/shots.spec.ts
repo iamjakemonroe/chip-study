@@ -622,3 +622,115 @@ test('study together, from the workspace', async ({ page }, info) => {
   await noSideScroll(page);
   await page.screenshot({ path: dir('room-share', info.project.name) });
 });
+
+// ── Prices, as a visitor in the US, the UK and Nigeria sees them ──────
+
+for (const [who, timezoneId, country] of [
+  ['us', 'America/New_York', 'US'],
+  ['uk', 'Europe/London', 'GB'],
+  ['ng', 'Africa/Lagos', 'NG'],
+] as const) {
+  test.describe(`prices, ${who}`, () => {
+    test.use({ timezoneId });
+
+    test(`prices for a visitor in ${country}`, async ({ page }, info) => {
+      const m = new MockBackend({ country, payOn: true });
+      await m.install(page, { signedIn: false });
+      await page.goto('/');
+      const pricing = page.locator('#pricing');
+      await pricing.scrollIntoViewIfNeeded();
+      await expect(pricing.getByText(/^Prices in /)).toBeVisible();
+      await page.waitForTimeout(1200);
+      await noSideScroll(page);
+      await pricing.screenshot({ path: dir(`price-landing-${who}`, info.project.name) });
+      await page.goto('/institutions');
+      const schools = page.locator('#pricing');
+      await schools.scrollIntoViewIfNeeded();
+      await expect(schools.getByText('per student per year')).toBeVisible();
+      await page.waitForTimeout(1200);
+      await noSideScroll(page);
+      await schools.screenshot({ path: dir(`price-institutions-${who}`, info.project.name) });
+      await m.install(page);
+      await page.goto('/app/plan');
+      await expect(page.getByRole('button', { name: /^Go Pro for / })).toBeVisible();
+      await page.waitForTimeout(400);
+      await noSideScroll(page);
+      await page.screenshot({ path: dir(`price-plan-${who}`, info.project.name), fullPage: true });
+    });
+  });
+}
+
+// ── Back from Flutterwave: each of the payment's results ──────────────
+
+test.describe('payment results', () => {
+  test.use({ timezoneId: 'Europe/London' });
+
+  async function back(page: Page, m: MockBackend, query: string) {
+    await page.route('https://checkout.flutterwave.test/**', (route) => route.fulfill({ contentType: 'text/html', body: '<h1>Checkout</h1>' }));
+    await m.install(page);
+    await page.goto('/app/plan');
+    await page.getByRole('button', { name: 'Go Pro for £6.49 a month' }).click();
+    await expect(page.getByRole('heading', { name: 'Checkout' })).toBeVisible();
+    await page.goto(`/app/plan?${query}`);
+  }
+
+  test('paid', async ({ page }, info) => {
+    const m = new MockBackend({ payOn: true });
+    await back(page, m, 'status=successful&tx_ref=kaivon-sub-1&transaction_id=9876');
+    await expect(page.getByRole('dialog', { name: 'You’re on Pro' })).toBeVisible();
+    await page.waitForTimeout(1300);
+    await page.screenshot({ path: dir('pay-paid', info.project.name) });
+  });
+
+  test('confirming', async ({ page }, info) => {
+    const m = new MockBackend({ payOn: true, confirm: [{ status: 'pending' }] });
+    await back(page, m, 'status=successful&tx_ref=kaivon-sub-1&transaction_id=9876');
+    await expect(page.getByRole('dialog', { name: 'Confirming your payment…' })).toBeVisible();
+    await page.waitForTimeout(600);
+    await page.screenshot({ path: dir('pay-pending', info.project.name) });
+  });
+
+  test('still going through, after two minutes', async ({ page }, info) => {
+    // In real time: two minutes of asking, as a buyer would wait.
+    test.setTimeout(240_000);
+    const m = new MockBackend({ payOn: true, confirm: [{ status: 'pending' }] });
+    await back(page, m, 'status=successful&tx_ref=kaivon-sub-1&transaction_id=9876');
+    await expect(page.getByRole('dialog', { name: 'Confirming your payment…' })).toBeVisible();
+    await expect(page.getByRole('dialog', { name: 'Still going through' })).toBeVisible({ timeout: 150_000 });
+    expect(m.confirms).toBeGreaterThanOrEqual(35);
+    await page.waitForTimeout(800);
+    await page.screenshot({ path: dir('pay-pending-late', info.project.name) });
+  });
+
+  test('didn’t go through', async ({ page }, info) => {
+    const m = new MockBackend({ payOn: true });
+    await back(page, m, 'status=cancelled&tx_ref=kaivon-sub-1');
+    await expect(page.getByRole('dialog', { name: 'Payment not completed' })).toBeVisible();
+    await page.waitForTimeout(600);
+    await page.screenshot({ path: dir('pay-failed', info.project.name) });
+  });
+
+  test('couldn’t confirm', async ({ page }, info) => {
+    const m = new MockBackend({ payOn: true, confirm: [{ status: 'unknown' }] });
+    await back(page, m, 'status=successful&tx_ref=kaivon-sub-1&transaction_id=9876');
+    await expect(page.getByRole('dialog', { name: 'We couldn’t confirm this payment' })).toBeVisible();
+    await page.waitForTimeout(600);
+    await page.screenshot({ path: dir('pay-unconfirmed', info.project.name) });
+  });
+
+  test('an invoice, paid', async ({ page }, info) => {
+    const m = new MockBackend({ payOn: true });
+    const { inst } = m.inst.seedSchool();
+    const ref = 'kaivon-inv-000000000000000000000001';
+    m.inst.invoices.push({ id: 'inv-1', institution_id: inst.id, ref, label: 'Lagos Bay University: Chip Study seats', seats: 200, months: 12, currency: 'NGN', amount: 9_000_000, status: 'open', created_at: new Date().toISOString(), paid_at: null });
+    await page.route('https://checkout.flutterwave.test/**', (route) => route.fulfill({ contentType: 'text/html', body: '<h1>Checkout</h1>' }));
+    await m.install(page);
+    await page.goto(`/app/institution/${inst.id}?tab=settings`);
+    await page.getByRole('region', { name: 'Invoices' }).getByRole('button', { name: 'Pay ₦9,000,000' }).click();
+    await expect(page.getByRole('heading', { name: 'Checkout' })).toBeVisible();
+    await page.goto(`/app/institution/${inst.id}?invoice=1&status=successful&tx_ref=${ref}&transaction_id=9876`);
+    await expect(page.getByRole('dialog', { name: 'Invoice paid' })).toBeVisible();
+    await page.waitForTimeout(1300);
+    await page.screenshot({ path: dir('pay-invoice-paid', info.project.name) });
+  });
+});
