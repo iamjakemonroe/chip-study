@@ -14,6 +14,8 @@ export interface LegalDoc {
 }
 
 const updated = '9 November 2026';
+/** The Privacy Policy changed on its own: Cloudflare Web Analytics counts visits. */
+const privacyUpdated = '11 November 2026';
 const contact = site.email;
 
 /** The Terms, with every price in the one currency the reader sees and pays in. */
@@ -170,7 +172,7 @@ export const privacy: LegalDoc = {
   slug: 'privacy',
   title: 'Privacy Policy',
   summary: 'What Chip Study keeps about you, why, who helps us run it, and how to delete it.',
-  updated,
+  updated: privacyUpdated,
   sections: [
     {
       heading: 'Who we are',
@@ -204,7 +206,7 @@ export const privacy: LegalDoc = {
         [
           'Anthropic writes Chip’s answers (Claude). To answer, Chip sends it your message, your assignment’s brief, rubric, sources and readings, your document and anything you selected. Anthropic doesn’t use it to train its models.',
           'Supabase hosts Chip Study’s servers and stores its data (in the European Union, Ireland).',
-          'Cloudflare delivers the website, protects it from attacks, and carries study rooms’ audio, video and screen sharing between the people in them, without keeping it.',
+          'Cloudflare delivers the website, protects it from attacks, counts visits to it (see Counting visits, below), and carries study rooms’ audio, video and screen sharing between the people in them, without keeping it.',
           'Flutterwave processes payments for Pro.',
           'Resend delivers the sign-in codes we email you.',
         ],
@@ -246,9 +248,15 @@ export const privacy: LegalDoc = {
       ],
     },
     {
+      heading: 'Counting visits',
+      body: [
+        'We use Cloudflare Web Analytics to count visits to study.kaivon.app. It uses no cookies or local storage, doesn’t follow you to other sites and doesn’t build a profile of you. It records things like the page you visit, the site you came from, your country, your browser and device type, and how quickly the page loaded, and it doesn’t keep your IP address. It never sees your work or your conversations with Chip.',
+      ],
+    },
+    {
       heading: 'On your device',
       body: [
-        'Chip Study keeps your sign-in and preferences in your browser’s storage, and a copy of the document you’re writing until it’s saved, so nothing is lost if the connection drops. There are no advertising or tracking cookies and no analytics.',
+        'Chip Study keeps your sign-in and preferences in your browser’s storage, and a copy of the document you’re writing until it’s saved, so nothing is lost if the connection drops. There are no advertising or tracking cookies, and the visit counter stores nothing on your device.',
       ],
     },
     {
